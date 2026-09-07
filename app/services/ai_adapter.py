@@ -1,5 +1,6 @@
 """Shared OpenAI adapter for adapting technical PDF blocks into narration."""
 
+import base64
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -31,6 +32,22 @@ class AIRequest:
     max_output_tokens: int | None = None
     metadata: dict[str, str] = field(default_factory=dict)
     model: str | None = None
+    images: tuple[ImageInput, ...] = ()
+
+
+@dataclass(frozen=True)
+class ImageInput:
+    data: bytes
+    media_type: str = "image/png"
+
+    def __post_init__(self) -> None:
+        if not self.data:
+            raise ValueError("Image input cannot be empty")
+
+    @property
+    def data_url(self) -> str:
+        encoded = base64.b64encode(self.data).decode("ascii")
+        return f"data:{self.media_type};base64,{encoded}"
 
 
 @dataclass(frozen=True)
@@ -62,6 +79,7 @@ class AIResponse:
     usage: TokenUsage
     cost: UsageCost
     provider_response_id: str | None
+    cached: bool = False
 
 
 class AIAdapter(Protocol):
@@ -152,7 +170,7 @@ class OpenAIAdapter:
         request_kwargs: dict[str, Any] = {
             "model": request.model or self._settings.ai_model,
             "instructions": request.instructions,
-            "input": request.input_text,
+            "input": self._response_input(request),
         }
         if request.max_output_tokens is not None:
             request_kwargs["max_output_tokens"] = request.max_output_tokens
@@ -172,6 +190,17 @@ class OpenAIAdapter:
             with attempt:
                 return await self._client.responses.create(**request_kwargs)
         raise AssertionError("Retry loop did not return or raise")
+
+    @staticmethod
+    def _response_input(request: AIRequest) -> str | list[dict[str, Any]]:
+        if not request.images:
+            return request.input_text
+
+        content: list[dict[str, str]] = [{"type": "input_text", "text": request.input_text}]
+        content.extend(
+            {"type": "input_image", "image_url": image.data_url} for image in request.images
+        )
+        return [{"role": "user", "content": content}]
 
     @staticmethod
     def _extract_usage(raw_usage: Any) -> TokenUsage:

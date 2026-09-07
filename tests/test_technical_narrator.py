@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 import pytest
 
 from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageCost
-from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock
-from app.services.technical_narrator import TechnicalNarrator
+from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
+from app.services.technical_narrator import NarrationSettings, TechnicalNarrator
+from app.services.visual_assets import VisualAsset
 
 
 @dataclass
@@ -20,6 +21,17 @@ class RecordingAdapter:
             cost=UsageCost(input_cost=0, cached_input_cost=0, output_cost=0),
             provider_response_id="response",
         )
+
+
+@dataclass
+class MemoryNarrationCache:
+    values: dict[str, str] = field(default_factory=dict)
+
+    async def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    async def set(self, key: str, narration: str) -> None:
+        self.values[key] = narration
 
 
 def code_block() -> TextBlock:
@@ -42,7 +54,9 @@ async def test_narrator_builds_code_request() -> None:
 
     assert response.text == "Spoken narration"
     request = adapter.requests[0]
-    assert request.metadata == {"block_type": "code", "page_number": "3"}
+    assert request.metadata["block_type"] == "code"
+    assert request.metadata["page_number"] == "3"
+    assert request.metadata["language"] == "ru"
     assert request.input_text.startswith("def total")
     assert "Не читай синтаксис посимвольно" in request.instructions
 
@@ -60,7 +74,9 @@ async def test_narrator_builds_table_request_without_losing_empty_cells() -> Non
     await narrator.narrate_table(table)
 
     request = adapter.requests[0]
-    assert request.metadata == {"block_type": "table", "page_number": "4"}
+    assert request.metadata["block_type"] == "table"
+    assert request.metadata["page_number"] == "4"
+    assert request.metadata["detail"] == "standard"
     assert request.input_text == "Таблица:\nMetric | Value\nPages | 42\nNotes | (пусто)"
     assert "Не придумывай значения" in request.instructions
 
@@ -74,6 +90,41 @@ async def test_narrator_builds_formula_request() -> None:
     await narrator.narrate_formula(formula)
 
     request = adapter.requests[0]
-    assert request.metadata == {"block_type": "formula", "page_number": "5"}
+    assert request.metadata["block_type"] == "formula"
+    assert request.metadata["page_number"] == "5"
     assert request.input_text == "E = m * c^2"
     assert "объясни смысл связи" in request.instructions.lower()
+
+
+@pytest.mark.asyncio
+async def test_narrator_reuses_cache_and_invalidates_it_for_new_settings() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter, cache=MemoryNarrationCache())
+
+    first = await narrator.narrate_code(code_block())
+    second = await narrator.narrate_code(code_block())
+    await narrator.narrate_code(code_block(), NarrationSettings(detail="detailed"))
+
+    assert first.cached is False
+    assert second.cached is True
+    assert second.text == "Spoken narration"
+    assert len(adapter.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_narrator_builds_vision_request_for_visual_asset() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    asset = VisualAsset(
+        visual=VisualBlock(page_number=6, bbox=(0, 0, 100, 100), kind="diagram"),
+        image_data=b"diagram-png",
+        context="Architecture flow",
+    )
+
+    await narrator.narrate_visual(asset)
+
+    request = adapter.requests[0]
+    assert request.metadata["block_type"] == "diagram"
+    assert request.metadata["page_number"] == "6"
+    assert request.images[0].data == b"diagram-png"
+    assert "Architecture flow" in request.input_text

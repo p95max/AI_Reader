@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.config import Settings
-from app.services.ai_adapter import AIRequest, AIResponse, OpenAIAdapter
+from app.services.ai_adapter import AIRequest, AIResponse, ImageInput, OpenAIAdapter
 
 
 class FakeResponses:
@@ -101,3 +101,22 @@ async def test_openai_adapter_retries_timeout_errors() -> None:
 
     assert response.text == "Recovered"
     assert len(client.responses.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_openai_adapter_sends_images_as_responses_vision_input() -> None:
+    client = FakeClient([provider_response("Visual narration")])
+    adapter = OpenAIAdapter(make_settings(), client=client)
+
+    await adapter.generate(
+        AIRequest(
+            instructions="Describe image",
+            input_text="Diagram context",
+            images=(ImageInput(data=b"png-data"),),
+        )
+    )
+
+    content = client.responses.calls[0]["input"][0]["content"]
+    assert content[0] == {"type": "input_text", "text": "Diagram context"}
+    assert content[1]["type"] == "input_image"
+    assert content[1]["image_url"].startswith("data:image/png;base64,")
