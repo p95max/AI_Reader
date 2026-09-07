@@ -27,6 +27,40 @@ def make_pdf(path: Path) -> None:
         document.save(path)
 
 
+def make_technical_pdf(path: Path) -> None:
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "Technical chapter", fontsize=20)
+        page.insert_text(
+            (72, 112),
+            "def parse_book(path):\n    return path",
+            fontsize=10,
+            fontname="cour",
+        )
+        page.insert_text((72, 152), "E = m * c^2", fontsize=11)
+
+        left, top, cell_width, cell_height = 72, 190, 110, 28
+        for row in range(3):
+            page.draw_line(
+                (left, top + row * cell_height),
+                (left + cell_width * 2, top + row * cell_height),
+            )
+        for column in range(3):
+            page.draw_line(
+                (left + column * cell_width, top),
+                (left + column * cell_width, top + cell_height * 2),
+            )
+        page.insert_text((80, 210), "Name", fontsize=10)
+        page.insert_text((190, 210), "Value", fontsize=10)
+        page.insert_text((80, 238), "Pages", fontsize=10)
+        page.insert_text((190, 238), "42", fontsize=10)
+
+        pixmap = pymupdf.Pixmap(pymupdf.csRGB, 2, 2, b"\xff\x00\x00" * 4, False)
+        page.insert_image(pymupdf.Rect(72, 280, 112, 320), pixmap=pixmap)
+        page.draw_rect(pymupdf.Rect(150, 280, 260, 340), color=(0, 0, 0))
+        document.save(path)
+
+
 def test_pdf_parser_extracts_pages_paragraphs_and_headings(tmp_path: Path) -> None:
     source = tmp_path / "source.pdf"
     make_pdf(source)
@@ -46,3 +80,15 @@ def test_pdf_parser_downloads_from_storage_and_removes_temporary_file(tmp_path: 
     parsed = PDFParser().parse_stored_pdf(LocalPDFSource(source), "books/example/original.pdf")
 
     assert parsed.page_count == 2
+
+
+def test_pdf_parser_detects_technical_blocks(tmp_path: Path) -> None:
+    source = tmp_path / "technical.pdf"
+    make_technical_pdf(source)
+
+    parsed_page = PDFParser().parse_file(source).pages[0]
+
+    assert parsed_page.code_blocks[0].text.startswith("def parse_book")
+    assert parsed_page.tables[0].cells[0] == ("Name", "Value")
+    assert {visual.kind for visual in parsed_page.visuals} >= {"image", "diagram"}
+    assert parsed_page.formulas[0].text == "E = m * c^2"
