@@ -4,9 +4,10 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from math import ceil
 from pathlib import Path
 from statistics import median
-from typing import Protocol
+from typing import Any, Protocol
 
 import pymupdf
 
@@ -98,9 +99,10 @@ class PDFParser:
     def parse_file(self, path: Path) -> ParsedDocument:
         try:
             with pymupdf.open(path) as document:
-                base_font_size = self._base_font_size(document)
+                repeated_margins = self._repeated_margin_text(document)
+                base_font_size = self._base_font_size(document, repeated_margins)
                 pages = tuple(
-                    self._parse_page(page, page_number, base_font_size)
+                    self._parse_page(page, page_number, base_font_size, repeated_margins)
                     for page_number, page in enumerate(document, start=1)
                 )
         except (OSError, RuntimeError, pymupdf.FileDataError) as error:
@@ -108,36 +110,46 @@ class PDFParser:
 
         return ParsedDocument(page_count=len(pages), pages=pages)
 
-    def _base_font_size(self, document: pymupdf.Document) -> float:
+    def _base_font_size(
+        self,
+        document: pymupdf.Document,
+        repeated_margins: frozenset[str],
+    ) -> float:
         sizes = [
             span["size"]
             for page in document
             for block in page.get_text("dict")["blocks"]
             if block["type"] == 0
+            if self._normalized_margin_text(self._text_from_block(block)) not in repeated_margins
             for line in block["lines"]
             for span in line["spans"]
             if span["text"].strip()
         ]
         return float(median(sizes)) if sizes else 0.0
 
+    def _repeated_margin_text(self, document: pymupdf.Document) -> frozenset[str]:
+        occurrences: dict[str, set[int]] = {}
+        for page_number, page in enumerate(document, start=1):
+            for block in page.get_text("dict")["blocks"]:
+                if block["type"] != 0 or not self._is_margin_block(block, page):
+                    continue
+                normalized = self._normalized_margin_text(self._text_from_block(block))
+                if normalized:
+                    occurrences.setdefault(normalized, set()).add(page_number)
+
+        minimum_pages = max(2, ceil(len(document) / 2))
+        return frozenset(text for text, pages in occurrences.items() if len(pages) >= minimum_pages)
+
     def _parse_page(
         self,
         page: pymupdf.Page,
         page_number: int,
         base_font_size: float,
+        repeated_margins: frozenset[str],
     ) -> ParsedPage:
         blocks: list[TextBlock] = []
-        for raw_block in page.get_text("dict", sort=True)["blocks"]:
-            if raw_block["type"] != 0:
-                continue
-
-            text = "\n".join(
-                "".join(span["text"] for span in line["spans"]).strip()
-                for line in raw_block["lines"]
-            ).strip()
-            if not text:
-                continue
-
+        raw_blocks = self._ordered_text_blocks(page, repeated_margins)
+        for raw_block, text in raw_blocks:
             spans = [span for line in raw_block["lines"] for span in line["spans"]]
             font_size = max(
                 (span["size"] for span in spans),
@@ -181,6 +193,72 @@ class PDFParser:
             visuals=self._extract_visuals(page, page_number),
             formulas=formulas,
         )
+
+    def _ordered_text_blocks(
+        self,
+        page: pymupdf.Page,
+        repeated_margins: frozenset[str],
+    ) -> list[tuple[dict[str, Any], str]]:
+        blocks = [
+            (block, text)
+            for block in page.get_text("dict")["blocks"]
+            if block["type"] == 0
+            if (text := self._text_from_block(block))
+            if self._normalized_margin_text(text) not in repeated_margins
+        ]
+        if len(blocks) < 4:
+            return sorted(blocks, key=self._vertical_position)
+
+        x_positions = sorted({block["bbox"][0] for block, _ in blocks})
+        gaps = [
+            (right - left, (left + right) / 2)
+            for left, right in zip(x_positions, x_positions[1:], strict=False)
+        ]
+        if not gaps:
+            return sorted(blocks, key=self._vertical_position)
+
+        largest_gap, split_x = max(gaps)
+        if largest_gap < page.rect.width * 0.2:
+            return sorted(blocks, key=self._vertical_position)
+
+        left_column = [block for block in blocks if block[0]["bbox"][0] < split_x]
+        right_column = [block for block in blocks if block[0]["bbox"][0] >= split_x]
+        if min(len(left_column), len(right_column)) < 2:
+            return sorted(blocks, key=self._vertical_position)
+
+        return sorted(left_column, key=self._vertical_position) + sorted(
+            right_column,
+            key=self._vertical_position,
+        )
+
+    @staticmethod
+    def _text_from_block(block: dict[str, Any]) -> str:
+        return "\n".join(
+            "".join(span["text"] for span in line["spans"]).strip() for line in block["lines"]
+        ).strip()
+
+    @staticmethod
+    def _normalized_text(text: str) -> str:
+        return " ".join(text.casefold().split())
+
+    @classmethod
+    def _normalized_margin_text(cls, text: str) -> str:
+        normalized = cls._normalized_text(text)
+        if re.fullmatch(r"(?:page|p\.?|страница)\s+\d+", normalized):
+            return re.sub(r"\d+", "#", normalized)
+        return normalized
+
+    @staticmethod
+    def _vertical_position(block: tuple[dict[str, Any], str]) -> tuple[float, float]:
+        bbox = block[0]["bbox"]
+        return bbox[1], bbox[0]
+
+    @staticmethod
+    def _is_margin_block(block: dict[str, Any], page: pymupdf.Page) -> bool:
+        top = block["bbox"][1]
+        bottom = block["bbox"][3]
+        margin_height = page.rect.height * 0.15
+        return top <= margin_height or bottom >= page.rect.height - margin_height
 
     def _extract_tables(self, page: pymupdf.Page, page_number: int) -> tuple[TableBlock, ...]:
         try:

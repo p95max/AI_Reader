@@ -61,6 +61,23 @@ def make_technical_pdf(path: Path) -> None:
         document.save(path)
 
 
+def make_quality_pdf(path: Path) -> None:
+    with pymupdf.open() as document:
+        for page_number in range(1, 4):
+            page = document.new_page()
+            page.insert_text((72, 32), "AI Reader Technical Guide", fontsize=9)
+            page.insert_text((72, 810), f"Page {page_number}", fontsize=9)
+
+            if page_number == 2:
+                page.insert_text((72, 110), "Left column: first paragraph.", fontsize=11)
+                page.insert_text((72, 150), "Left column: second paragraph.", fontsize=11)
+                page.insert_text((330, 110), "Right column: first paragraph.", fontsize=11)
+                page.insert_text((330, 150), "Right column: second paragraph.", fontsize=11)
+            else:
+                page.insert_text((72, 110), f"Body content on page {page_number}.", fontsize=11)
+        document.save(path)
+
+
 def test_pdf_parser_extracts_pages_paragraphs_and_headings(tmp_path: Path) -> None:
     source = tmp_path / "source.pdf"
     make_pdf(source)
@@ -92,3 +109,21 @@ def test_pdf_parser_detects_technical_blocks(tmp_path: Path) -> None:
     assert parsed_page.tables[0].cells[0] == ("Name", "Value")
     assert {visual.kind for visual in parsed_page.visuals} >= {"image", "diagram"}
     assert parsed_page.formulas[0].text == "E = m * c^2"
+
+
+def test_pdf_parser_removes_repeated_margins_and_reads_columns(tmp_path: Path) -> None:
+    source = tmp_path / "quality.pdf"
+    make_quality_pdf(source)
+
+    parsed = PDFParser().parse_file(source)
+    two_column_page = parsed.pages[1]
+
+    assert all("AI Reader Technical Guide" not in page.text for page in parsed.pages)
+    assert all("Page " not in page.text for page in parsed.pages)
+    assert parsed.pages[0].text == "Body content on page 1."
+    assert [block.text for block in two_column_page.paragraphs] == [
+        "Left column: first paragraph.",
+        "Left column: second paragraph.",
+        "Right column: first paragraph.",
+        "Right column: second paragraph.",
+    ]
