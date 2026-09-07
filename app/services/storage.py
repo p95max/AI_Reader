@@ -17,6 +17,8 @@ class ObjectStorageError(RuntimeError):
 class ObjectStorage(Protocol):
     def upload_file(self, source: Path, key: str, content_type: str) -> None: ...
 
+    def download_file(self, key: str, destination: Path) -> None: ...
+
     def delete_file(self, key: str) -> None: ...
 
 
@@ -62,6 +64,12 @@ class S3Storage:
             self.client.delete_object(Bucket=self.bucket_name, Key=key)
         except (ClientError, BotoCoreError) as error:
             raise ObjectStorageError("Unable to delete the uploaded PDF") from error
+
+    def download_file(self, key: str, destination: Path) -> None:
+        try:
+            self.client.download_file(self.bucket_name, key, str(destination))
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to download the stored PDF") from error
 
 
 @lru_cache

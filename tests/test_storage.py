@@ -10,6 +10,7 @@ class FakeS3Client:
         self.bucket_created = False
         self.uploads: list[tuple[str, str, str, dict[str, str]]] = []
         self.deleted: list[tuple[str, str]] = []
+        self.downloads: list[tuple[str, str, str]] = []
 
     def head_bucket(self, *, Bucket: str) -> None:
         if not self.bucket_created:
@@ -24,6 +25,10 @@ class FakeS3Client:
     def delete_object(self, *, Bucket: str, Key: str) -> None:
         self.deleted.append((Bucket, Key))
 
+    def download_file(self, bucket: str, key: str, destination: str) -> None:
+        self.downloads.append((bucket, key, destination))
+        Path(destination).write_bytes(b"%PDF-")
+
 
 def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
     client = FakeS3Client()
@@ -32,6 +37,7 @@ def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
     source.write_bytes(b"%PDF-")
 
     storage.upload_file(source, "books/book-id/original.pdf", "application/pdf")
+    storage.download_file("books/book-id/original.pdf", tmp_path / "downloaded.pdf")
     storage.delete_file("books/book-id/original.pdf")
 
     assert client.bucket_created is True
@@ -40,3 +46,4 @@ def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
         {"ContentType": "application/pdf"},
     )
     assert client.deleted == [(storage.bucket_name, "books/book-id/original.pdf")]
+    assert client.downloads[0][:2] == (storage.bucket_name, "books/book-id/original.pdf")
