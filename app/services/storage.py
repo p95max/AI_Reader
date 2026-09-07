@@ -1,0 +1,69 @@
+from functools import lru_cache
+from pathlib import Path
+from typing import Protocol
+
+import boto3
+from botocore.client import BaseClient
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
+
+from app.core.config import get_settings
+
+
+class ObjectStorageError(RuntimeError):
+    """Raised when an S3-compatible storage operation fails."""
+
+
+class ObjectStorage(Protocol):
+    def upload_file(self, source: Path, key: str, content_type: str) -> None: ...
+
+    def delete_file(self, key: str) -> None: ...
+
+
+class S3Storage:
+    def __init__(self, client: BaseClient | None = None) -> None:
+        settings = get_settings()
+        self.bucket_name = settings.s3_bucket_name
+        self.client = client or boto3.client(
+            "s3",
+            endpoint_url=settings.s3_endpoint_url,
+            aws_access_key_id=settings.s3_access_key_id,
+            aws_secret_access_key=settings.s3_secret_access_key,
+            region_name=settings.s3_region_name,
+            config=Config(signature_version="s3v4"),
+        )
+
+    def ensure_bucket(self) -> None:
+        try:
+            self.client.head_bucket(Bucket=self.bucket_name)
+        except ClientError as error:
+            code = error.response.get("Error", {}).get("Code", "")
+            if code not in {"404", "NoSuchBucket", "NotFound"}:
+                raise ObjectStorageError("Unable to access the upload bucket") from error
+            try:
+                self.client.create_bucket(Bucket=self.bucket_name)
+            except (ClientError, BotoCoreError) as create_error:
+                raise ObjectStorageError("Unable to create the upload bucket") from create_error
+
+    def upload_file(self, source: Path, key: str, content_type: str) -> None:
+        try:
+            self.ensure_bucket()
+            self.client.upload_file(
+                str(source),
+                self.bucket_name,
+                key,
+                ExtraArgs={"ContentType": content_type},
+            )
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to store the uploaded PDF") from error
+
+    def delete_file(self, key: str) -> None:
+        try:
+            self.client.delete_object(Bucket=self.bucket_name, Key=key)
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to delete the uploaded PDF") from error
+
+
+@lru_cache
+def get_object_storage() -> ObjectStorage:
+    return S3Storage()

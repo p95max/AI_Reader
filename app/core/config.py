@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
+    s3_endpoint_url: str = "http://localhost:9000"
+    s3_access_key_id: str = "minioadmin"
+    s3_secret_access_key: str = "minioadmin"
+    s3_bucket_name: str = "ai-reader"
+    s3_region_name: str = "us-east-1"
+    max_pdf_size_bytes: int = 100 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

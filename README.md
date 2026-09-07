@@ -21,7 +21,8 @@ uv run uvicorn app.main:app --reload
 uv run celery -A app.workers.celery_app worker --loglevel=INFO
 ```
 
-`docker compose down` останавливает PostgreSQL и Redis, не удаляя их тома.
+`docker compose down` останавливает PostgreSQL, Redis и MinIO, не удаляя их тома.
+MinIO (S3-совместимое хранилище) доступно на `http://127.0.0.1:9001`.
 
 ## Команды разработки
 
@@ -39,6 +40,8 @@ app/
   core/         # конфигурация приложения
   db/           # SQLAlchemy engine, сессии и metadata
   workers/      # Celery application и фоновые задачи
+  models/        # ORM-модели
+  services/      # S3-хранилище и обработка upload
 alembic/        # миграции PostgreSQL
 docker-compose.yml
   main.py       # точка входа FastAPI
