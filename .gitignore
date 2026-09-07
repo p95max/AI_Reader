@@ -8,4 +8,6 @@ htmlcov/
 .env
 .env.*
 !.env.example
-
+.tmp/
+postgres_data/
+redis_data/

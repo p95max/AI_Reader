@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     app_name: str = "AI Reader API"
     environment: Literal["local", "development", "staging", "production"] = "local"
     debug: bool = False
+    database_url: str = "postgresql+psycopg://ai_reader:ai_reader@localhost:5433/ai_reader"
+    database_echo: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
 
     model_config = SettingsConfigDict(
         env_file=".env",
