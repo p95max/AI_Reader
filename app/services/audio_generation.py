@@ -98,19 +98,47 @@ class AudioChunkGenerator:
     ) -> list[GeneratedAudioChunk]:
         generated: list[GeneratedAudioChunk] = []
         for chunk_index, text in enumerate(self._chunker.split(narration)):
-            audio = self._synthesizer.synthesize(SpeechRequest(text=text, voice=voice, speed=speed))
-            storage_key = f"books/{book_id}/audio/{chunk_index:06d}.wav"
-            self._storage.upload_bytes(audio.content, storage_key, audio.mime_type)
             generated.append(
-                GeneratedAudioChunk(
-                    chunk_index=chunk_index,
-                    narration=text,
-                    storage_key=storage_key,
-                    content_type=audio.mime_type,
-                    duration_milliseconds=wav_duration_milliseconds(audio.content),
+                self.generate_chunk(
+                    book_id,
+                    chunk_index,
+                    text,
+                    voice=voice,
+                    speed=speed,
                 )
             )
         return generated
+
+    def split_narration(self, narration: str) -> list[str]:
+        return self._chunker.split(narration)
+
+    def generate_chunk(
+        self,
+        book_id: UUID,
+        chunk_index: int,
+        narration: str,
+        *,
+        voice: str | None = None,
+        speed: SpeechSpeed = SpeechSpeed.NORMAL,
+    ) -> GeneratedAudioChunk:
+        audio = self._synthesizer.synthesize(
+            SpeechRequest(text=narration, voice=voice, speed=speed)
+        )
+        storage_key = audio_storage_key(book_id, chunk_index)
+        self._storage.upload_bytes(audio.content, storage_key, audio.mime_type)
+        return GeneratedAudioChunk(
+            chunk_index=chunk_index,
+            narration=narration,
+            storage_key=storage_key,
+            content_type=audio.mime_type,
+            duration_milliseconds=wav_duration_milliseconds(audio.content),
+        )
+
+
+def audio_storage_key(book_id: UUID, chunk_index: int) -> str:
+    if chunk_index < 0:
+        raise ValueError("chunk_index must not be negative")
+    return f"books/{book_id}/audio/{chunk_index:06d}.wav"
 
 
 def wav_duration_milliseconds(content: bytes) -> int:

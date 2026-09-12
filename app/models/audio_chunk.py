@@ -1,11 +1,18 @@
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+
+class AudioChunkStatus(StrEnum):
+    PENDING = "pending"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class AudioChunk(Base):
@@ -27,6 +34,18 @@ class AudioChunk(Base):
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
     content_type: Mapped[str] = mapped_column(String(100), default="audio/wav")
     duration_milliseconds: Mapped[int] = mapped_column(Integer)
+    status: Mapped[AudioChunkStatus] = mapped_column(
+        Enum(
+            AudioChunkStatus,
+            name="audio_chunk_status",
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        default=AudioChunkStatus.PENDING,
+    )
+    voice: Mapped[str | None] = mapped_column(String(100))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    generation_time_milliseconds: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

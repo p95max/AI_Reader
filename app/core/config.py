@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     tts_language: str = "Russian"
     tts_instruction: str = "Говори ясно, естественно и спокойно."
     tts_chunk_max_characters: int = Field(default=1_200, ge=100)
+    tts_max_attempts: int = Field(default=3, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",
