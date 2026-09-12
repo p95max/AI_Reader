@@ -9,7 +9,8 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models.book import Book, BookStatus
-from app.schemas.books import BookRead
+from app.schemas.books import BookProgressRead, BookRead
+from app.services.book_progress import BookProgressService
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
 from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
 
@@ -19,6 +20,18 @@ router = APIRouter()
 def _normalized_filename(upload: UploadFile) -> str:
     filename = Path(upload.filename or "book.pdf").name.strip()
     return filename[:255] or "book.pdf"
+
+
+@router.get("/{book_id}/progress", response_model=BookProgressRead)
+async def get_book_progress(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> BookProgressRead:
+    if await session.get(Book, book_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    progress = await BookProgressService(session).get(book_id)
+    return BookProgressRead.model_validate(progress)
 
 
 @router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
