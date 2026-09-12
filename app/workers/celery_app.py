@@ -17,5 +17,8 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_routes={"ai_reader.tts.*": {"queue": "tts"}},
+    task_routes={
+        "ai_reader.processing.*": {"queue": "processing"},
+        "ai_reader.tts.*": {"queue": "tts"},
+    },
 )

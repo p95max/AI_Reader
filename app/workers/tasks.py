@@ -10,6 +10,9 @@ from app.services.book_structure import BookStructureBuilder
 from app.services.book_structure_processor import BookStructureProcessor
 from app.services.book_structure_store import SQLAlchemyBookStructureStore
 from app.services.pdf_parser import PDFParser
+from app.services.progressive_processing import ProgressiveProcessingPlanner
+from app.services.progressive_processing_coordinator import ProgressiveProcessingCoordinator
+from app.services.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
 from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
 from app.services.storage import get_object_storage
 from app.services.tts import SpeechRequest, SpeechSpeed, get_tts_synthesizer
@@ -44,6 +47,26 @@ async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:
         "queued_chapters": len(chapters),
         "queued_content_chunks": sum(len(chapter.chunks) for chapter in chapters),
     }
+
+
+@celery_app.task(name="ai_reader.processing.plan_book")
+def plan_book_processing(book_id: str) -> dict[str, object]:
+    """Return the priority-aware work plan without blocking playback."""
+    return asyncio.run(_plan_book_processing(UUID(book_id)))
+
+
+async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
+    settings = get_settings()
+    plan = await ProgressiveProcessingCoordinator(
+        ProgressiveProcessingPlanner(
+            priority_chapter_count=settings.progressive_priority_chapter_count,
+            playback_min_ready_duration_milliseconds=(
+                settings.playback_min_ready_duration_seconds * 1_000
+            ),
+        ),
+        SQLAlchemyProgressiveProcessingStore(),
+    ).plan(book_id)
+    return {"book_id": str(book_id), **plan.as_task_payload()}
 
 
 @celery_app.task(name="ai_reader.tts.synthesize")
