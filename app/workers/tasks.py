@@ -2,8 +2,14 @@ import asyncio
 from uuid import UUID
 
 from app.core.config import get_settings
+from app.db.session import SessionLocal
+from app.models.book import Book
 from app.services.audio_chunk_store import SQLAlchemyAudioChunkStore
 from app.services.audio_generation import AudioChunkGenerator, NarrationChunker
+from app.services.book_structure import BookStructureBuilder
+from app.services.book_structure_processor import BookStructureProcessor
+from app.services.book_structure_store import SQLAlchemyBookStructureStore
+from app.services.pdf_parser import PDFParser
 from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
 from app.services.storage import get_object_storage
 from app.services.tts import SpeechRequest, SpeechSpeed, get_tts_synthesizer
@@ -14,6 +20,30 @@ from app.workers.celery_app import celery_app
 def healthcheck() -> dict[str, str]:
     """Minimal task that verifies a worker can consume jobs."""
     return {"status": "ok"}
+
+
+@celery_app.task(name="ai_reader.books.build_structure")
+def build_book_structure(book_id: str) -> dict[str, int | str]:
+    """Parse a stored PDF and persist its chapter/content-chunk structure."""
+    return asyncio.run(_build_book_structure(UUID(book_id)))
+
+
+async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:
+    async with SessionLocal() as session:
+        book = await session.get(Book, book_id)
+    if book is None:
+        raise ValueError(f"Book {book_id} was not found")
+
+    document = PDFParser().parse_stored_pdf(get_object_storage(), book.storage_key)
+    chapters = await BookStructureProcessor(
+        BookStructureBuilder(),
+        SQLAlchemyBookStructureStore(),
+    ).create(book_id, document)
+    return {
+        "book_id": str(book_id),
+        "queued_chapters": len(chapters),
+        "queued_content_chunks": sum(len(chapter.chunks) for chapter in chapters),
+    }
 
 
 @celery_app.task(name="ai_reader.tts.synthesize")

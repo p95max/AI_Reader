@@ -2,5 +2,13 @@
 
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book
+from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 
-__all__ = ["AudioChunk", "AudioChunkStatus", "Book"]
+__all__ = [
+    "AudioChunk",
+    "AudioChunkStatus",
+    "Book",
+    "Chapter",
+    "ContentChunk",
+    "ProcessingStatus",
+]

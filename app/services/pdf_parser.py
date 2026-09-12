@@ -55,6 +55,7 @@ class FormulaBlock:
 class ParsedPage:
     number: int
     text: str
+    text_blocks: tuple[TextBlock, ...]
     paragraphs: tuple[TextBlock, ...]
     headings: tuple[TextBlock, ...]
     code_blocks: tuple[TextBlock, ...]
@@ -186,6 +187,7 @@ class PDFParser:
         return ParsedPage(
             number=page_number,
             text="\n\n".join(block.text for block in blocks),
+            text_blocks=tuple(blocks),
             paragraphs=paragraphs,
             headings=headings,
             code_blocks=code_blocks,
