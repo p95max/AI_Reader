@@ -22,7 +22,7 @@ class Book(Base):
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column(String(255))
     author: Mapped[str] = mapped_column(
-        String(255), default="Не указан", server_default="Не указан"
+        String(255), default="Unknown author", server_default="Unknown author"
     )
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)

@@ -1,12 +1,12 @@
 const pages = {
   "/library": {
-    title: "Библиотека",
+    title: "Library",
   },
   "/upload": {
     title: "Add Book",
   },
   "/settings": {
-    title: "Настройки",
+    title: "Settings",
   },
 };
 
@@ -23,7 +23,7 @@ function escapeHtml(value) {
 function currentPage(pathname) {
   if (pathname.startsWith("/books/")) {
     return {
-      title: "Книга и плеер",
+      title: "Book and player",
     };
   }
   return pages[pathname] ?? pages["/library"];
@@ -48,24 +48,24 @@ function shell(content) {
     <div class="app-frame">
       <aside class="sidebar">
         <a class="brand" href="/library" aria-label="AI Reader"><span>AI</span>READER<small>TURN PDFS INTO KNOWLEDGE.</small></a>
-        <nav class="navigation" aria-label="Основная навигация">${navigation()}</nav>
+        <nav class="navigation" aria-label="Primary navigation">${navigation()}</nav>
         <div class="sidebar-links"><a href="/library">▥ Stats</a><a href="/library">? Help</a><a href="/library">◉ GitHub</a></div>
         <p class="sidebar-quote">“READ.<br>LISTEN.<br>LEARN ANYWHERE.”</p>
         <small class="version">v0.1.0</small>
       </aside>
       <main class="app-shell">${content}</main>
-      <nav class="mobile-navigation" aria-label="Мобильная навигация">${navigation()}</nav>
+      <nav class="mobile-navigation" aria-label="Mobile navigation">${navigation()}</nav>
     </div>
 `;
 }
 
 function statusLabel(status) {
   return {
-    uploaded: "Загружена",
-    queued: "В очереди",
-    processing: "Обрабатывается",
-    ready: "Готова",
-    failed: "Ошибка",
+    uploaded: "Uploaded",
+    queued: "Queued",
+    processing: "Processing",
+    ready: "Ready",
+    failed: "Failed",
   }[status] ?? status;
 }
 
@@ -84,8 +84,8 @@ function renderBookCard(book) {
       <span class="book-card__body">
         <span class="book-card__status status--${escapeHtml(book.status)}">${statusLabel(book.status)}</span>
         <strong>${title}</strong><span class="book-card__author">${author}</span>
-        <span class="progress" aria-label="Готово ${progress}%"><span style="width: ${progress}%"></span></span>
-        <span class="book-card__meta">◖ ${progress}% готово <b>•••</b></span>
+        <span class="progress" aria-label="${progress}% complete"><span style="width: ${progress}%"></span></span>
+        <span class="book-card__meta">◖ ${progress}% complete <b>•••</b></span>
       </span>
     </a>
   `;
@@ -99,13 +99,13 @@ async function renderLibrary() {
       <div><h1>LIBRARY</h1><p>Your books, always with you.</p></div>
       <div class="library-actions"><label class="search"><span>⌕</span><input id="library-search" type="search" placeholder="Search books..." /></label><a class="button" href="/upload">＋ ADD BOOK</a></div>
     </header>
-    <div class="filters" role="group" aria-label="Фильтр книг">
+    <div class="filters" role="group" aria-label="Book filter">
       <button type="button" data-filter="all" class="is-active">All</button>
       <button type="button" data-filter="processing">Processing</button>
       <button type="button" data-filter="ready">Ready</button>
       <button type="button" disabled>Favorites</button>
     </div>
-    <section id="book-list" class="book-list"><p class="placeholder">Загружаем библиотеку…</p></section>
+    <section id="book-list" class="book-list"><p class="placeholder">Loading library…</p></section>
   `);
 
   let books = [];
@@ -120,7 +120,7 @@ async function renderLibrary() {
     ));
     list.innerHTML = visible.length
       ? visible.map(renderBookCard).join("")
-      : '<a class="empty-library" href="/upload"><b>＋</b><span>Добавьте первую книгу</span><small>PDF → аудиокнига</small></a>';
+      : '<a class="empty-library" href="/upload"><b>＋</b><span>Add your first book</span><small>PDF → audiobook</small></a>';
   };
   search.addEventListener("input", draw);
   document.querySelectorAll("[data-filter]").forEach((button) => {
@@ -133,11 +133,11 @@ async function renderLibrary() {
   });
   try {
     const response = await fetch("/api/v1/books");
-    if (!response.ok) throw new Error("Не удалось загрузить книги");
+    if (!response.ok) throw new Error("Unable to load books");
     books = await response.json();
     draw();
   } catch (error) {
-    list.innerHTML = '<p class="placeholder">Не удалось загрузить библиотеку. Попробуйте позже.</p>';
+    list.innerHTML = '<p class="placeholder">Unable to load the library. Please try again later.</p>';
   }
 }
 
@@ -157,7 +157,7 @@ function renderUpload() {
 function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1>YOUR BOOK</h1><p>Техническая аудиокнига</p><span class="book-card__meta">◖ готовится · главы и плеер появятся здесь</span></div></div>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1>YOUR BOOK</h1><p>Technical audiobook</p><span class="book-card__meta">◖ preparing · chapters and player will appear here</span></div></div>
     <div class="player-tabs"><button class="is-active">Player</button><button>Chapters</button><button>Details</button></div><div class="player-track"><span></span></div><div class="player-controls"><button>↺15</button><button>◀</button><button class="play">Ⅱ</button><button>▶</button><button>15↻</button></div></section>
   `);
 }

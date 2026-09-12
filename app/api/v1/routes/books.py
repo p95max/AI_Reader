@@ -109,7 +109,7 @@ async def create_book(
     filename = _normalized_filename(file)
     book = Book(
         title=Path(filename).stem[:255] or "Untitled book",
-        author="Не указан",
+        author="Unknown author",
         original_filename=filename,
         storage_key="pending",
         content_type="application/pdf",
