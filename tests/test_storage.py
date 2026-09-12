@@ -11,6 +11,7 @@ class FakeS3Client:
         self.uploads: list[tuple[str, str, str, dict[str, str]]] = []
         self.deleted: list[tuple[str, str]] = []
         self.downloads: list[tuple[str, str, str]] = []
+        self.puts: list[tuple[str, str, bytes, str]] = []
 
     def head_bucket(self, *, Bucket: str) -> None:
         if not self.bucket_created:
@@ -28,6 +29,9 @@ class FakeS3Client:
     def download_file(self, bucket: str, key: str, destination: str) -> None:
         self.downloads.append((bucket, key, destination))
         Path(destination).write_bytes(b"%PDF-")
+
+    def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str) -> None:
+        self.puts.append((Bucket, Key, Body, ContentType))
 
 
 def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
@@ -47,3 +51,14 @@ def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
     )
     assert client.deleted == [(storage.bucket_name, "books/book-id/original.pdf")]
     assert client.downloads[0][:2] == (storage.bucket_name, "books/book-id/original.pdf")
+
+
+def test_s3_storage_uploads_generated_audio_bytes() -> None:
+    client = FakeS3Client()
+    storage = S3Storage(client=client)  # type: ignore[arg-type]
+
+    storage.upload_bytes(b"audio", "books/book-id/audio/000000.wav", "audio/wav")
+
+    assert client.puts == [
+        (storage.bucket_name, "books/book-id/audio/000000.wav", b"audio", "audio/wav")
+    ]

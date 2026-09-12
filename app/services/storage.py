@@ -17,6 +17,8 @@ class ObjectStorageError(RuntimeError):
 class ObjectStorage(Protocol):
     def upload_file(self, source: Path, key: str, content_type: str) -> None: ...
 
+    def upload_bytes(self, content: bytes, key: str, content_type: str) -> None: ...
+
     def download_file(self, key: str, destination: Path) -> None: ...
 
     def delete_file(self, key: str) -> None: ...
@@ -58,6 +60,18 @@ class S3Storage:
             )
         except (ClientError, BotoCoreError) as error:
             raise ObjectStorageError("Unable to store the uploaded PDF") from error
+
+    def upload_bytes(self, content: bytes, key: str, content_type: str) -> None:
+        try:
+            self.ensure_bucket()
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to store generated audio") from error
 
     def delete_file(self, key: str) -> None:
         try:
