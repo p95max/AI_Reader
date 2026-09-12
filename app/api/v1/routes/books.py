@@ -2,14 +2,17 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models.book import Book, BookStatus
-from app.schemas.books import BookProgressRead, BookRead
+from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
+from app.schemas.books import BookLibraryItemRead, BookProgressRead, BookRead
+from app.services.book_library import build_book_library_item
 from app.services.book_progress import BookProgressService
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
 from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
@@ -20,6 +23,47 @@ router = APIRouter()
 def _normalized_filename(upload: UploadFile) -> str:
     filename = Path(upload.filename or "book.pdf").name.strip()
     return filename[:255] or "book.pdf"
+
+
+@router.get("", response_model=list[BookLibraryItemRead])
+async def list_books(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    query: Annotated[str | None, Query(max_length=255)] = None,
+    filter: Annotated[BookStatus | None, Query()] = None,
+) -> list[BookLibraryItemRead]:
+    books_query = select(Book).order_by(Book.created_at.desc())
+    if query:
+        books_query = books_query.where(Book.title.ilike(f"%{query.strip()}%"))
+    if filter in (BookStatus.PROCESSING, BookStatus.READY):
+        books_query = books_query.where(Book.status == filter)
+
+    books = tuple((await session.scalars(books_query)).all())
+    if not books:
+        return []
+
+    stats = await session.execute(
+        select(
+            Chapter.book_id,
+            func.count(ContentChunk.id).label("total_chunks"),
+            func.coalesce(
+                func.sum(case((ContentChunk.status == ProcessingStatus.READY, 1), else_=0)), 0
+            ).label("ready_chunks"),
+        )
+        .outerjoin(ContentChunk, ContentChunk.chapter_id == Chapter.id)
+        .where(Chapter.book_id.in_(book.id for book in books))
+        .group_by(Chapter.book_id)
+    )
+    counts = {book_id: (int(total), int(ready)) for book_id, total, ready in stats.tuples()}
+    return [
+        BookLibraryItemRead.model_validate(
+            build_book_library_item(
+                book,
+                total_chunks=counts.get(book.id, (0, 0))[0],
+                ready_chunks=counts.get(book.id, (0, 0))[1],
+            )
+        )
+        for book in books
+    ]
 
 
 @router.get("/{book_id}/progress", response_model=BookProgressRead)
@@ -65,6 +109,7 @@ async def create_book(
     filename = _normalized_filename(file)
     book = Book(
         title=Path(filename).stem[:255] or "Untitled book",
+        author="Не указан",
         original_filename=filename,
         storage_key="pending",
         content_type="application/pdf",

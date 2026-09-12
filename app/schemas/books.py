@@ -12,12 +12,21 @@ class BookRead(BaseModel):
 
     id: UUID
     title: str
+    author: str
     original_filename: str
     content_type: str
     size_bytes: int
     status: BookStatus
     created_at: datetime
     updated_at: datetime
+
+
+class BookLibraryItemRead(BaseModel):
+    id: UUID
+    title: str
+    author: str
+    status: BookStatus
+    progress_percent: float
 
 
 class ContentChunkProgressRead(BaseModel):

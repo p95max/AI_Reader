@@ -1,0 +1,163 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #10131a;
+  color: #edf1f7;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.navigation {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.navigation a {
+  color: #aeb8c9;
+  text-decoration: none;
+}
+
+.navigation a[aria-current="page"] {
+  color: #fff;
+  font-weight: 700;
+}
+
+.placeholder {
+  border: 1px dashed #3b465b;
+  border-radius: 12px;
+  padding: 28px;
+  color: #aeb8c9;
+}
+
+.library-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.library-header h1,
+.library-header p {
+  margin: 0;
+}
+
+.library-header p,
+.book-card__author,
+.book-card__percent {
+  color: #aeb8c9;
+}
+
+.button,
+.filters button {
+  background: #6f5cff;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  padding: 10px 14px;
+  text-decoration: none;
+}
+
+.search {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.search input {
+  background: #171c26;
+  border: 1px solid #3b465b;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  padding: 10px;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.filters button {
+  background: #252d3b;
+}
+
+.filters button.is-active {
+  background: #6f5cff;
+}
+
+.book-list {
+  display: grid;
+  gap: 12px;
+}
+
+.book-card {
+  align-items: center;
+  background: #171c26;
+  border: 1px solid #2a3344;
+  border-radius: 12px;
+  color: inherit;
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  text-decoration: none;
+}
+
+.book-cover {
+  align-items: center;
+  background: linear-gradient(145deg, #6f5cff, #1c9ac9);
+  border-radius: 8px;
+  display: flex;
+  font-size: 32px;
+  font-weight: 700;
+  height: 88px;
+  justify-content: center;
+  width: 64px;
+}
+
+.book-card__body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.book-card__status {
+  font-size: 14px;
+}
+
+.status--ready {
+  color: #66d39e;
+}
+
+.status--processing {
+  color: #f3c45a;
+}
+
+.status--failed {
+  color: #f47b8c;
+}
+
+.progress {
+  background: #303a4c;
+  border-radius: 99px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.progress span {
+  background: #6f5cff;
+  display: block;
+  height: 100%;
+}
