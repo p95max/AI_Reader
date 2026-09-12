@@ -21,6 +21,17 @@ uv run uvicorn app.main:app --reload
 uv run celery -A app.workers.celery_app worker --loglevel=INFO
 ```
 
+TTS использует отдельную очередь и воркер (первый синтез загрузит модель, заданную
+`AI_READER_TTS_MODEL`):
+
+```bash
+uv run celery -A app.workers.celery_app worker -Q tts --loglevel=INFO
+```
+
+По умолчанию выбран Qwen3-TTS 1.7B. Провайдер, модель, голос, язык и базовая
+инструкция задаются переменными `AI_READER_TTS_*`; задача и остальной код не
+привязаны к Qwen, поэтому новый провайдер подключается через адаптер TTS.
+
 `docker compose down` останавливает PostgreSQL, Redis и MinIO, не удаляя их тома.
 MinIO (S3-совместимое хранилище) доступно на `http://127.0.0.1:9001`.
 

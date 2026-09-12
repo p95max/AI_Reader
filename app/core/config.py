@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     ai_cached_input_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     ai_output_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     narration_cache_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, ge=1)
+    # TTS is deliberately provider-agnostic: another backend can be registered without
+    # changing Celery tasks or callers.
+    tts_provider: str = "qwen"
+    tts_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    tts_device: Literal["cpu", "cuda"] = "cpu"
+    tts_voice: str = "Ryan"
+    tts_language: str = "Russian"
+    tts_instruction: str = "Говори ясно, естественно и спокойно."
 
     model_config = SettingsConfigDict(
         env_file=".env",
