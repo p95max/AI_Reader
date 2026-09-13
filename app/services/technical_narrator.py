@@ -26,15 +26,35 @@ class CodeMode(StrEnum):
     HYBRID = "hybrid"
 
 
+class TableMode(StrEnum):
+    SUMMARIZE = "summarize"
+    READ_ALL = "read_all"
+    SKIP = "skip"
+
+
+class DiagramMode(StrEnum):
+    DESCRIBE = "describe"
+    SKIP = "skip"
+
+
+class FormulaMode(StrEnum):
+    EXPLAIN = "explain"
+    READ = "read"
+    SKIP = "skip"
+
+
 @dataclass(frozen=True)
 class NarrationSettings:
     language: str = "ru"
     detail: str = "standard"
     model: str | None = None
     code_mode: CodeMode = CodeMode.HYBRID
+    table_mode: TableMode = TableMode.SUMMARIZE
+    diagram_mode: DiagramMode = DiagramMode.DESCRIBE
+    formula_mode: FormulaMode = FormulaMode.EXPLAIN
 
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 DEFAULT_NARRATION_SETTINGS = NarrationSettings()
 
 
@@ -52,14 +72,7 @@ class TechnicalNarrator:
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
         if settings.code_mode == CodeMode.SKIP:
-            return AIResponse(
-                text="Фрагмент кода пропущен по настройке чтения.",
-                model="code-mode-skip",
-                usage=TokenUsage(),
-                cost=UsageCost(input_cost=0, cached_input_cost=0, output_cost=0),
-                provider_response_id=None,
-                cached=False,
-            )
+            return self._skipped("code")
         instructions = {
             CodeMode.EXPLAIN: (
                 "Объясни фрагмент кода по-русски для прослушивания. Сначала назови его "
@@ -94,16 +107,26 @@ class TechnicalNarrator:
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
-        return await self._narrate(
-            block_type="table",
-            source=self._format_table(block),
-            instructions=(
+        if settings.table_mode == TableMode.SKIP:
+            return self._skipped("table")
+        instructions = {
+            TableMode.SUMMARIZE: (
                 "Преобразуй таблицу в компактное русскоязычное narration для прослушивания. "
                 "Назови заголовки, ключевые сравнения и важные числовые значения с единицами. "
                 "Не придумывай значения для пустых ячеек и явно отделяй факты от вывода."
             ),
+            TableMode.READ_ALL: (
+                "Прочитай таблицу по-русски целиком для прослушивания. Последовательно назови "
+                "заголовки всех столбцов и все строки со значениями, включая единицы измерения. "
+                "Пустые ячейки обозначай как пустые, ничего не суммируй и не пропускай."
+            ),
+        }[settings.table_mode]
+        return await self._narrate(
+            block_type="table",
+            source=self._format_table(block),
+            instructions=instructions,
             page_number=block.page_number,
-            max_output_tokens=500,
+            max_output_tokens=800 if settings.table_mode == TableMode.READ_ALL else 500,
             settings=settings,
             usage_context=usage_context,
         )
@@ -114,15 +137,25 @@ class TechnicalNarrator:
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
-        return await self._narrate(
-            block_type="formula",
-            source=block.text,
-            instructions=(
+        if settings.formula_mode == FormulaMode.SKIP:
+            return self._skipped("formula")
+        instructions = {
+            FormulaMode.EXPLAIN: (
                 "Объясни формулу по-русски для прослушивания. Сначала произнеси её в "
                 "читаемой форме, затем объясни смысл связи и известных переменных. Не "
                 "подставляй отсутствующие значения и не выводи следствия, которых нет "
                 "в формуле."
             ),
+            FormulaMode.READ: (
+                "Прочитай формулу по-русски в понятной устной форме, последовательно "
+                "произнося переменные, индексы, степени, знаки операций и скобки. Не "
+                "объясняй смысл формулы и не добавляй отсутствующие значения."
+            ),
+        }[settings.formula_mode]
+        return await self._narrate(
+            block_type="formula",
+            source=block.text,
+            instructions=instructions,
             page_number=block.page_number,
             max_output_tokens=250,
             settings=settings,
@@ -135,6 +168,8 @@ class TechnicalNarrator:
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
+        if settings.diagram_mode == DiagramMode.SKIP:
+            return self._skipped("diagram")
         visual_kind = "схема" if asset.visual.kind == "diagram" else "изображение"
         source = hashlib.sha256(asset.image_data).hexdigest()
         return await self._narrate(
@@ -193,6 +228,9 @@ class TechnicalNarrator:
                     "language": settings.language,
                     "detail": settings.detail,
                     "code_mode": settings.code_mode.value,
+                    "table_mode": settings.table_mode.value,
+                    "diagram_mode": settings.diagram_mode.value,
+                    "formula_mode": settings.formula_mode.value,
                 },
                 model=settings.model,
                 images=images,
@@ -202,6 +240,23 @@ class TechnicalNarrator:
         if self._cache is not None:
             await self._cache.set(cache_key, response.text)
         return response
+
+    @staticmethod
+    def _skipped(block_type: str) -> AIResponse:
+        messages = {
+            "code": "Фрагмент кода пропущен по настройке чтения.",
+            "table": "Таблица пропущена по настройке чтения.",
+            "diagram": "Диаграмма пропущена по настройке чтения.",
+            "formula": "Формула пропущена по настройке чтения.",
+        }
+        return AIResponse(
+            text=messages[block_type],
+            model=f"{block_type}-mode-skip",
+            usage=TokenUsage(),
+            cost=UsageCost(input_cost=0, cached_input_cost=0, output_cost=0),
+            provider_response_id=None,
+            cached=False,
+        )
 
     @staticmethod
     def _cache_key(

@@ -163,7 +163,7 @@ function renderUpload() {
       <a class="back-link" href="/library">← Library</a><h1>ADD BOOK</h1><p>Turn your technical PDF into an audiobook.</p>
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>Max 200 MB · PDF only</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
-      <div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="Ryan">Ryan</option><option value="Aiden">Aiden</option><option value="Vivian">Vivian</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div>
+      <div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="Ryan">Ryan</option><option value="Aiden">Aiden</option><option value="Vivian">Vivian</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
       <p class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
       <button id="start-processing" class="button button--wide" type="submit" disabled>START PROCESSING</button>
@@ -181,6 +181,9 @@ function renderUpload() {
   let file = null;
   let readingStyle = "neutral";
   let codeMode = "hybrid";
+  let tableMode = "summarize";
+  let diagramMode = "describe";
+  let formulaMode = "explain";
 
   const formatBytes = (bytes) => {
     if (bytes < 1_024) return `${bytes} B`;
@@ -225,6 +228,14 @@ function renderUpload() {
     button.classList.add("is-active");
     codeMode = button.dataset.mode;
   }));
+  const bindModeButtons = (selector, selectMode) => document.querySelectorAll(`${selector} button`).forEach((button) => button.addEventListener("click", () => {
+    document.querySelectorAll(`${selector} button`).forEach((item) => item.classList.remove("is-active"));
+    button.classList.add("is-active");
+    selectMode(button.dataset.mode);
+  }));
+  bindModeButtons("#table-mode-buttons", (mode) => { tableMode = mode; });
+  bindModeButtons("#diagram-mode-buttons", (mode) => { diagramMode = mode; });
+  bindModeButtons("#formula-mode-buttons", (mode) => { formulaMode = mode; });
   document.querySelectorAll("#style-buttons button").forEach((button) => button.addEventListener("click", () => {
     document.querySelectorAll("#style-buttons button").forEach((item) => item.classList.remove("is-active"));
     button.classList.add("is-active");
@@ -245,7 +256,7 @@ function renderUpload() {
       const processing = await fetch(`/api/v1/books/${book.id}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voice: voiceSetting.value, speed: speedSetting.value, style: readingStyle, code_mode: codeMode }),
+        body: JSON.stringify({ voice: voiceSetting.value, speed: speedSetting.value, style: readingStyle, code_mode: codeMode, table_mode: tableMode, diagram_mode: diagramMode, formula_mode: formulaMode }),
       });
       if (!processing.ok) throw new Error(await processing.text());
       window.location.assign(`/books/${book.id}`);

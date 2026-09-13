@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.book import BookStatus
 from app.models.chapter import ProcessingStatus
-from app.services.technical_narrator import CodeMode
+from app.services.technical_narrator import CodeMode, DiagramMode, FormulaMode, TableMode
 from app.services.tts import ReadingStyle, SpeechSpeed
 
 
@@ -23,6 +23,9 @@ class BookRead(BaseModel):
     tts_speed: SpeechSpeed
     tts_style: ReadingStyle
     code_mode: CodeMode
+    table_mode: TableMode
+    diagram_mode: DiagramMode
+    formula_mode: FormulaMode
     created_at: datetime
     updated_at: datetime
 
@@ -66,6 +69,9 @@ class BookTTSSettingsUpdate(BaseModel):
     speed: SpeechSpeed = SpeechSpeed.NORMAL
     style: ReadingStyle = ReadingStyle.NEUTRAL
     code_mode: CodeMode = CodeMode.HYBRID
+    table_mode: TableMode = TableMode.SUMMARIZE
+    diagram_mode: DiagramMode = DiagramMode.DESCRIBE
+    formula_mode: FormulaMode = FormulaMode.EXPLAIN
 
 
 class BookAudioChunkRead(BaseModel):

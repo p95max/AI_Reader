@@ -42,6 +42,9 @@ class Book(Base):
     tts_speed: Mapped[str] = mapped_column(String(20), default="normal")
     tts_style: Mapped[str] = mapped_column(String(20), default="neutral")
     code_mode: Mapped[str] = mapped_column(String(20), default="hybrid")
+    table_mode: Mapped[str] = mapped_column(String(20), default="summarize")
+    diagram_mode: Mapped[str] = mapped_column(String(20), default="describe")
+    formula_mode: Mapped[str] = mapped_column(String(20), default="explain")
     status: Mapped[BookStatus] = mapped_column(
         Enum(
             BookStatus,

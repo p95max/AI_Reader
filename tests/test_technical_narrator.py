@@ -5,7 +5,14 @@ import pytest
 
 from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageContext, UsageCost
 from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
-from app.services.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
+from app.services.technical_narrator import (
+    CodeMode,
+    DiagramMode,
+    FormulaMode,
+    NarrationSettings,
+    TableMode,
+    TechnicalNarrator,
+)
 from app.services.visual_assets import VisualAsset
 
 
@@ -43,6 +50,14 @@ def code_block() -> TextBlock:
         font_size=10,
         is_heading=False,
         is_code=True,
+    )
+
+
+def diagram_asset() -> VisualAsset:
+    return VisualAsset(
+        visual=VisualBlock(page_number=6, bbox=(0, 0, 100, 100), kind="diagram"),
+        image_data=b"diagram-png",
+        context="Architecture flow",
     )
 
 
@@ -132,6 +147,40 @@ async def test_narrator_builds_table_request_without_losing_empty_cells() -> Non
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("table_mode", "instruction_fragment"),
+    (
+        (TableMode.SUMMARIZE, "ключевые сравнения"),
+        (TableMode.READ_ALL, "все строки со значениями"),
+    ),
+)
+async def test_narrator_selects_prompt_for_each_billable_table_mode(
+    table_mode: TableMode, instruction_fragment: str
+) -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    table = TableBlock(page_number=4, bbox=(0, 0, 100, 50), cells=(("Metric", "Value"),))
+
+    await narrator.narrate_table(table, NarrationSettings(table_mode=table_mode))
+
+    assert instruction_fragment in adapter.requests[0].instructions
+    assert adapter.requests[0].metadata["table_mode"] == table_mode.value
+
+
+@pytest.mark.asyncio
+async def test_narrator_skips_table_without_a_provider_request() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    table = TableBlock(page_number=4, bbox=(0, 0, 100, 50), cells=(("Metric", "Value"),))
+
+    response = await narrator.narrate_table(table, NarrationSettings(table_mode=TableMode.SKIP))
+
+    assert adapter.requests == []
+    assert response.model == "table-mode-skip"
+    assert response.cost.total_cost == 0
+
+
+@pytest.mark.asyncio
 async def test_narrator_builds_formula_request() -> None:
     adapter = RecordingAdapter()
     narrator = TechnicalNarrator(adapter)
@@ -144,6 +193,42 @@ async def test_narrator_builds_formula_request() -> None:
     assert request.metadata["page_number"] == "5"
     assert request.input_text == "E = m * c^2"
     assert "объясни смысл связи" in request.instructions.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("formula_mode", "instruction_fragment"),
+    (
+        (FormulaMode.EXPLAIN, "Объясни формулу"),
+        (FormulaMode.READ, "Прочитай формулу"),
+    ),
+)
+async def test_narrator_selects_prompt_for_each_billable_formula_mode(
+    formula_mode: FormulaMode, instruction_fragment: str
+) -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    formula = FormulaBlock(page_number=5, text="E = m * c^2", bbox=(0, 0, 100, 20))
+
+    await narrator.narrate_formula(formula, NarrationSettings(formula_mode=formula_mode))
+
+    assert instruction_fragment in adapter.requests[0].instructions
+    assert adapter.requests[0].metadata["formula_mode"] == formula_mode.value
+
+
+@pytest.mark.asyncio
+async def test_narrator_skips_formula_without_a_provider_request() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    formula = FormulaBlock(page_number=5, text="E = m * c^2", bbox=(0, 0, 100, 20))
+
+    response = await narrator.narrate_formula(
+        formula, NarrationSettings(formula_mode=FormulaMode.SKIP)
+    )
+
+    assert adapter.requests == []
+    assert response.model == "formula-mode-skip"
+    assert response.cost.total_cost == 0
 
 
 @pytest.mark.asyncio
@@ -165,11 +250,7 @@ async def test_narrator_reuses_cache_and_invalidates_it_for_new_settings() -> No
 async def test_narrator_builds_vision_request_for_visual_asset() -> None:
     adapter = RecordingAdapter()
     narrator = TechnicalNarrator(adapter)
-    asset = VisualAsset(
-        visual=VisualBlock(page_number=6, bbox=(0, 0, 100, 100), kind="diagram"),
-        image_data=b"diagram-png",
-        context="Architecture flow",
-    )
+    asset = diagram_asset()
 
     await narrator.narrate_visual(asset)
 
@@ -178,3 +259,18 @@ async def test_narrator_builds_vision_request_for_visual_asset() -> None:
     assert request.metadata["page_number"] == "6"
     assert request.images[0].data == b"diagram-png"
     assert "Architecture flow" in request.input_text
+    assert request.metadata["diagram_mode"] == "describe"
+
+
+@pytest.mark.asyncio
+async def test_narrator_skips_diagram_without_a_provider_request() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+
+    response = await narrator.narrate_visual(
+        diagram_asset(), NarrationSettings(diagram_mode=DiagramMode.SKIP)
+    )
+
+    assert adapter.requests == []
+    assert response.model == "diagram-mode-skip"
+    assert response.cost.total_cost == 0

@@ -334,6 +334,9 @@ async def create_book(
         tts_speed="normal",
         tts_style="neutral",
         code_mode="hybrid",
+        table_mode="summarize",
+        diagram_mode="describe",
+        formula_mode="explain",
         status=BookStatus.UPLOADED,
     )
     session.add(book)
@@ -377,6 +380,9 @@ async def start_book_processing(
         book.tts_speed = payload.speed.value
         book.tts_style = payload.style.value
         book.code_mode = payload.code_mode.value
+        book.table_mode = payload.table_mode.value
+        book.diagram_mode = payload.diagram_mode.value
+        book.formula_mode = payload.formula_mode.value
 
     book.status = BookStatus.PROCESSING
     await session.commit()
