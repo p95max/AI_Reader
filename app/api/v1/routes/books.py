@@ -124,8 +124,9 @@ async def get_book(
     return book
 
 
-@router.get("/{book_id}/cost", response_model=BookCostRead)
-async def get_book_cost(
+@router.get("/{book_id}/usage", response_model=BookCostRead)
+@router.get("/{book_id}/cost", response_model=BookCostRead, include_in_schema=False)
+async def get_book_usage(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> BookCostRead:
