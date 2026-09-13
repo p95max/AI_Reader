@@ -156,7 +156,7 @@ async function renderLibrary() {
   }
 }
 
-function renderUpload() {
+async function renderUpload() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Add Book)</span><span>◉ USER⌄</span></header>
     <form id="upload-form" class="feature-page add-book-page">
@@ -241,6 +241,34 @@ function renderUpload() {
     button.classList.add("is-active");
     readingStyle = button.dataset.style;
   }));
+  const selectMode = (selector, mode, applyMode) => {
+    const button = [...document.querySelectorAll(`${selector} button`)].find((item) => item.dataset.mode === mode);
+    if (!button) return;
+    document.querySelectorAll(`${selector} button`).forEach((item) => item.classList.remove("is-active"));
+    button.classList.add("is-active");
+    applyMode(mode);
+  };
+  const selectStyle = (style) => {
+    const button = [...document.querySelectorAll("#style-buttons button")].find((item) => item.dataset.style === style);
+    if (!button) return;
+    document.querySelectorAll("#style-buttons button").forEach((item) => item.classList.remove("is-active"));
+    button.classList.add("is-active");
+    readingStyle = style;
+  };
+  try {
+    const response = await fetch("/api/v1/settings/preferences");
+    if (!response.ok) throw new Error("Unable to load preferences");
+    const preferences = await response.json();
+    voiceSetting.value = preferences.voice;
+    speedSetting.value = preferences.speed;
+    selectStyle(preferences.style);
+    selectMode("#mode-buttons", preferences.code_mode, (mode) => { codeMode = mode; });
+    selectMode("#table-mode-buttons", preferences.table_mode, (mode) => { tableMode = mode; });
+    selectMode("#diagram-mode-buttons", preferences.diagram_mode, (mode) => { diagramMode = mode; });
+    selectMode("#formula-mode-buttons", preferences.formula_mode, (mode) => { formulaMode = mode; });
+  } catch (error) {
+    statusMessage.textContent = "Saved preferences could not be loaded; using defaults.";
+  }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!file) return;
@@ -263,6 +291,53 @@ function renderUpload() {
     } catch (error) {
       startButton.disabled = false;
       statusMessage.textContent = "Upload failed. Please try again.";
+    }
+  });
+}
+
+async function renderSettings() {
+  document.querySelector("#app").innerHTML = shell(`
+    <header class="topbar"><span>Web / Desktop (Settings)</span><span>◉ USER⌄</span></header>
+    <form id="preferences-form" class="feature-page settings-page"><a class="back-link" href="/library">← Library</a><h1>SETTINGS</h1><p>Choose defaults for books you process next.</p>
+      <label class="voice-setting">Voice<select name="voice"><option value="Ryan">Ryan</option><option value="Aiden">Aiden</option><option value="Vivian">Vivian</option></select></label>
+      <label class="voice-setting">Speech speed<select name="speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label>
+      <label class="voice-setting">Reading style<select name="style"><option value="calm">Calm</option><option value="neutral">Neutral</option><option value="expressive">Expressive</option></select></label>
+      <label class="voice-setting">Code mode<select name="code_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option><option value="hybrid">Hybrid</option></select></label>
+      <label class="voice-setting">Table mode<select name="table_mode"><option value="summarize">Summarize</option><option value="read_all">Read all</option><option value="skip">Skip</option></select></label>
+      <label class="voice-setting">Diagram mode<select name="diagram_mode"><option value="describe">Describe</option><option value="skip">Skip</option></select></label>
+      <label class="voice-setting">Formula mode<select name="formula_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option></select></label>
+      <p id="preferences-status" class="upload-status" aria-live="polite">Loading saved preferences…</p><button class="button button--wide" type="submit">SAVE SETTINGS</button>
+    </form>
+  `);
+
+  const form = document.querySelector("#preferences-form");
+  const statusMessage = document.querySelector("#preferences-status");
+  try {
+    const response = await fetch("/api/v1/settings/preferences");
+    if (!response.ok) throw new Error("Unable to load preferences");
+    const preferences = await response.json();
+    Object.entries(preferences).forEach(([name, value]) => {
+      const control = form.elements.namedItem(name);
+      if (control && typeof value === "string") control.value = value;
+    });
+    statusMessage.textContent = "Settings are applied to each book when processing starts.";
+  } catch (error) {
+    statusMessage.textContent = "Unable to load saved settings.";
+  }
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    statusMessage.textContent = "Saving settings…";
+    const payload = Object.fromEntries(new FormData(form).entries());
+    try {
+      const response = await fetch("/api/v1/settings/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      statusMessage.textContent = "Settings saved. They will be used for your next book.";
+    } catch (error) {
+      statusMessage.textContent = "Unable to save settings. Please try again.";
     }
   });
 }
@@ -567,6 +642,8 @@ if (window.location.pathname === "/library") {
   renderUpload();
 } else if (window.location.pathname === "/player") {
   renderPlayerLanding();
+} else if (window.location.pathname === "/settings") {
+  renderSettings();
 } else if (window.location.pathname.startsWith("/books/")) {
   renderBookPage();
 } else {

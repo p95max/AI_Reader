@@ -38,9 +38,9 @@ from app.services.book_cost import BookCostService
 from app.services.book_estimate import estimate_book_processing_with_pricing
 from app.services.book_library import build_book_library_item
 from app.services.book_progress import BookProgressService
-from app.services.ownership import get_local_user_id
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
 from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
+from app.services.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
 
 router = APIRouter()
 
@@ -317,8 +317,9 @@ async def create_book(
     filename = _normalized_filename(file)
     pricing = settings.pricing_for_model()
     estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
+    preferences = await get_or_create_user_preferences(session, settings)
     book = Book(
-        user_id=await get_local_user_id(session),
+        user_id=preferences.user_id,
         title=Path(filename).stem[:255] or "Untitled book",
         author="Unknown author",
         original_filename=filename,
@@ -330,15 +331,9 @@ async def create_book(
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
         estimate_model_name=settings.ai_model,
         estimate_pricing_version=pricing.version,
-        tts_voice=settings.tts_voice,
-        tts_speed="normal",
-        tts_style="neutral",
-        code_mode="hybrid",
-        table_mode="summarize",
-        diagram_mode="describe",
-        formula_mode="explain",
         status=BookStatus.UPLOADED,
     )
+    apply_preferences_to_book(book, preferences)
     session.add(book)
 
     try:
@@ -375,14 +370,8 @@ async def start_book_processing(
     if book.status == BookStatus.PROCESSING:
         return book
 
-    if payload is not None:
-        book.tts_voice = payload.voice
-        book.tts_speed = payload.speed.value
-        book.tts_style = payload.style.value
-        book.code_mode = payload.code_mode.value
-        book.table_mode = payload.table_mode.value
-        book.diagram_mode = payload.diagram_mode.value
-        book.formula_mode = payload.formula_mode.value
+    preferences = payload or await get_or_create_user_preferences(session)
+    apply_preferences_to_book(book, preferences)
 
     book.status = BookStatus.PROCESSING
     await session.commit()

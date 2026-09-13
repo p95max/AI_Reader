@@ -53,6 +53,13 @@ def test_processing_endpoints_are_exposed_in_openapi() -> None:
     assert "post" in schema["paths"]["/api/v1/books/{book_id}/process"]
 
 
+def test_user_preferences_endpoints_are_exposed_in_openapi() -> None:
+    schema = app.openapi()
+
+    assert "get" in schema["paths"]["/api/v1/settings/preferences"]
+    assert "put" in schema["paths"]["/api/v1/settings/preferences"]
+
+
 def test_audio_player_endpoints_are_exposed_in_openapi() -> None:
     schema = app.openapi()
 

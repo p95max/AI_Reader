@@ -64,7 +64,7 @@ class BookCostRead(BaseModel):
     total_processing_cost_usd: float
 
 
-class BookTTSSettingsUpdate(BaseModel):
+class NarrationPreferences(BaseModel):
     voice: str = Field(default="Ryan", min_length=1, max_length=100)
     speed: SpeechSpeed = SpeechSpeed.NORMAL
     style: ReadingStyle = ReadingStyle.NEUTRAL
@@ -72,6 +72,20 @@ class BookTTSSettingsUpdate(BaseModel):
     table_mode: TableMode = TableMode.SUMMARIZE
     diagram_mode: DiagramMode = DiagramMode.DESCRIBE
     formula_mode: FormulaMode = FormulaMode.EXPLAIN
+
+
+class BookTTSSettingsUpdate(NarrationPreferences):
+    pass
+
+
+class UserPreferencesUpdate(NarrationPreferences):
+    pass
+
+
+class UserPreferencesRead(NarrationPreferences):
+    model_config = ConfigDict(from_attributes=True)
+
+    updated_at: datetime
 
 
 class BookAudioChunkRead(BaseModel):

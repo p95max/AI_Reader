@@ -247,6 +247,18 @@ async def test_narrator_reuses_cache_and_invalidates_it_for_new_settings() -> No
 
 
 @pytest.mark.asyncio
+async def test_narrator_cache_key_includes_technical_content_preferences() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter, cache=MemoryNarrationCache())
+    table = TableBlock(page_number=4, bbox=(0, 0, 100, 50), cells=(("Metric", "Value"),))
+
+    await narrator.narrate_table(table, NarrationSettings(table_mode=TableMode.SUMMARIZE))
+    await narrator.narrate_table(table, NarrationSettings(table_mode=TableMode.READ_ALL))
+
+    assert len(adapter.requests) == 2
+
+
+@pytest.mark.asyncio
 async def test_narrator_builds_vision_request_for_visual_asset() -> None:
     adapter = RecordingAdapter()
     narrator = TechnicalNarrator(adapter)
