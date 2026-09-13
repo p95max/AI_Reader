@@ -23,6 +23,13 @@ worker автоматически. API и PDF-worker не содержат PyTor
 docker compose logs -f
 ```
 
+Если стек уже был запущен до добавления новой Alembic-миграции, примените её без
+перезапуска данных:
+
+```bash
+docker compose run --rm migrate
+```
+
 Остановить стек, сохранив данные:
 
 ```bash

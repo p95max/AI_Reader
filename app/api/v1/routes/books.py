@@ -35,6 +35,7 @@ from app.schemas.books import (
 from app.services.book_estimate import estimate_book_processing
 from app.services.book_library import build_book_library_item
 from app.services.book_progress import BookProgressService
+from app.services.ownership import get_local_user_id
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
 from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
 
@@ -293,6 +294,7 @@ async def create_book(
 
     filename = _normalized_filename(file)
     book = Book(
+        user_id=await get_local_user_id(session),
         title=Path(filename).stem[:255] or "Untitled book",
         author="Unknown author",
         original_filename=filename,

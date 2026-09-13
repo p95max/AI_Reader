@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     ai_input_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     ai_cached_input_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     ai_output_cost_per_million_tokens: float = Field(default=0.0, ge=0)
+    ai_pricing_version: str = Field(default="default", min_length=1, max_length=100)
     narration_cache_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, ge=1)
     # TTS is deliberately provider-agnostic: another backend can be registered without
     # changing Celery tasks or callers.

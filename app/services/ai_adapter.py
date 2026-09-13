@@ -1,8 +1,11 @@
 """Shared OpenAI adapter for adapting technical PDF blocks into narration."""
 
 import base64
-from dataclasses import dataclass, field
+import inspect
+from collections.abc import Awaitable
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
+from uuid import UUID
 
 import structlog
 from openai import (
@@ -26,6 +29,16 @@ class AIResponseError(AIAdapterError):
 
 
 @dataclass(frozen=True)
+class UsageContext:
+    """Ownership hierarchy attached to a billable LLM request when it is known."""
+
+    user_id: UUID | None = None
+    book_id: UUID | None = None
+    chapter_id: UUID | None = None
+    content_chunk_id: UUID | None = None
+
+
+@dataclass(frozen=True)
 class AIRequest:
     instructions: str
     input_text: str
@@ -33,6 +46,8 @@ class AIRequest:
     metadata: dict[str, str] = field(default_factory=dict)
     model: str | None = None
     images: tuple[ImageInput, ...] = ()
+    usage_context: UsageContext | None = None
+    pricing_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,7 +102,7 @@ class AIAdapter(Protocol):
 
 
 class UsageReporter(Protocol):
-    def record(self, request: AIRequest, response: AIResponse) -> None: ...
+    def record(self, request: AIRequest, response: AIResponse) -> Awaitable[None] | None: ...
 
 
 class StructuredUsageReporter:
@@ -147,7 +162,11 @@ class OpenAIAdapter:
                 max_retries=0,
             )
         self._client = client
-        self._usage_reporter = usage_reporter or StructuredUsageReporter()
+        if usage_reporter is None:
+            from app.services.usage_tracking import PersistentUsageReporter
+
+            usage_reporter = PersistentUsageReporter()
+        self._usage_reporter = usage_reporter
 
     async def generate(self, request: AIRequest) -> AIResponse:
         provider_response = await self._create_response(request)
@@ -163,7 +182,15 @@ class OpenAIAdapter:
             cost=self._calculate_cost(usage),
             provider_response_id=getattr(provider_response, "id", None),
         )
-        self._usage_reporter.record(request, response)
+        persisted_request = request
+        if persisted_request.pricing_version is None:
+            persisted_request = replace(
+                persisted_request,
+                pricing_version=self._settings.ai_pricing_version,
+            )
+        recorded = self._usage_reporter.record(persisted_request, response)
+        if inspect.isawaitable(recorded):
+            await recorded
         return response
 
     async def _create_response(self, request: AIRequest) -> Any:
