@@ -13,7 +13,7 @@ function normalizeTopbarTitle() {
           ? "Player"
           : null;
 
-  if (title) topbarTitle.textContent = title;
+  if (title && topbarTitle.textContent !== title) topbarTitle.textContent = title;
 }
 
 function enhanceSettingsPage() {
@@ -91,7 +91,7 @@ function enhanceSettingsPage() {
 
   const status = form.querySelector("#preferences-status");
   if (status) {
-    const observer = new MutationObserver(() => syncAll());
+    const observer = new MutationObserver(syncAll);
     observer.observe(status, { childList: true, subtree: true, characterData: true });
   }
 
@@ -99,14 +99,10 @@ function enhanceSettingsPage() {
   window.setTimeout(syncAll, 1000);
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => requestAnimationFrame(enhanceSettingsPage), { once: true });
-} else {
-  requestAnimationFrame(enhanceSettingsPage);
-}
+const runEnhancement = () => requestAnimationFrame(enhanceSettingsPage);
 
-const appRoot = document.querySelector("#app");
-if (appRoot) {
-  const observer = new MutationObserver(() => enhanceSettingsPage());
-  observer.observe(appRoot, { childList: true, subtree: true });
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", runEnhancement, { once: true });
+} else {
+  runEnhancement();
 }
