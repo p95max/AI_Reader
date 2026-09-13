@@ -2,38 +2,73 @@
 
 Backend-сервис AI Reader на FastAPI и Python 3.14.
 
-## Быстрый старт
+## Запуск в Docker
 
 ```bash
-uv sync --all-groups
 cp .env.example .env
-docker compose up -d
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+docker compose up --build -d
 ```
 
-Сервис будет доступен на `http://127.0.0.1:8000`.
+Compose поднимает PostgreSQL, Redis, MinIO, миграции Alembic, FastAPI и два
+Celery worker (обработка PDF и TTS). Миграции применяются до старта API и
+worker автоматически.
+
+Сервис будет доступен на `http://127.0.0.1:8000` (или на значении `APP_PORT`).
 Интерактивная спецификация API: `http://127.0.0.1:8000/docs`.
 
-В отдельном терминале запустите worker задач:
+Логи всех компонентов:
 
 ```bash
-uv run celery -A app.workers.celery_app worker -Q processing --loglevel=INFO
+docker compose logs -f
 ```
 
-TTS использует отдельную очередь и воркер (первый синтез загрузит модель, заданную
-`AI_READER_TTS_MODEL`):
+Остановить стек, сохранив данные:
 
 ```bash
-uv run celery -A app.workers.celery_app worker -Q tts --loglevel=INFO
+docker compose down
+```
+
+Для полного сброса данных и скачанной TTS-модели:
+
+```bash
+docker compose down -v
+```
+
+### Live reload
+
+`docker-compose.yml` является dev-конфигурацией. Python-исходники и миграции
+монтируются в контейнеры: FastAPI перезагружается через Uvicorn при сохранении
+файла, а processing- и TTS-worker автоматически перезапускаются при изменении
+Python-кода. Пересборка нужна только после изменений `pyproject.toml`, `uv.lock`
+или `Dockerfile`:
+
+```bash
+docker compose up --build -d
 ```
 
 По умолчанию выбран Qwen3-TTS 1.7B. Провайдер, модель, голос, язык и базовая
 инструкция задаются переменными `AI_READER_TTS_*`; задача и остальной код не
 привязаны к Qwen, поэтому новый провайдер подключается через адаптер TTS.
 
-`docker compose down` останавливает PostgreSQL, Redis и MinIO, не удаляя их тома.
-MinIO (S3-совместимое хранилище) доступно на `http://127.0.0.1:9001`.
+PostgreSQL, Redis и MinIO доступны только внутри Docker-сети. Для диагностики
+используйте `docker compose exec`; данные и кеш модели хранятся в named volumes.
+
+## Локальный запуск без Docker
+
+```bash
+uv sync --all-groups
+cp .env.example .env
+docker compose up -d postgres redis minio
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+```
+
+В отдельных терминалах при необходимости:
+
+```bash
+uv run celery -A app.workers.celery_app worker -Q processing --loglevel=INFO
+uv run celery -A app.workers.celery_app worker -Q tts --loglevel=INFO
+```
 
 ## Команды разработки
 
