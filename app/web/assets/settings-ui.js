@@ -2,8 +2,18 @@ function normalizeTopbarTitle() {
   const topbarTitle = document.querySelector(".topbar > span:first-child");
   if (!topbarTitle) return;
 
-  const match = topbarTitle.textContent.trim().match(/^Web \/ Desktop \((.+)\)$/);
-  if (match) topbarTitle.textContent = match[1];
+  const pathname = window.location.pathname;
+  const title = pathname === "/library"
+    ? "Library"
+    : pathname === "/upload"
+      ? "Add Book"
+      : pathname === "/settings"
+        ? "Settings"
+        : pathname === "/player" || pathname.startsWith("/books/")
+          ? "Player"
+          : null;
+
+  if (title) topbarTitle.textContent = title;
 }
 
 function enhanceSettingsPage() {
