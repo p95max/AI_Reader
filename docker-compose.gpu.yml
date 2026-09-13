@@ -1,0 +1,13 @@
+# Optional NVIDIA GPU override for the TTS worker. Docker Engine needs the
+# NVIDIA Container Toolkit and a CUDA 12.8-compatible driver on the host.
+services:
+  worker-tts:
+    image: ai-reader-tts-gpu:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tts-gpu
+    environment:
+      AI_READER_TTS_DEVICE: cuda
+    gpus: all

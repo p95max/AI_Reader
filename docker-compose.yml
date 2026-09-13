@@ -52,6 +52,17 @@ x-app-build: &app-build
   build:
     context: .
     dockerfile: Dockerfile
+    target: api
+
+x-tts-image: &tts-image
+  image: ai-reader-tts-cpu:local
+  pull_policy: never
+
+x-tts-build: &tts-build
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: tts-cpu
 
 services:
   postgres:
@@ -137,7 +148,7 @@ services:
     restart: unless-stopped
 
   worker-tts:
-    <<: *app-image
+    <<: [*tts-image, *tts-build]
     environment: *app-environment
     command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --loglevel=INFO" /app/app
     volumes:

@@ -10,8 +10,9 @@ docker compose up --build -d
 ```
 
 Compose поднимает PostgreSQL, Redis, MinIO, миграции Alembic, FastAPI и два
-Celery worker (обработка PDF и TTS). Миграции применяются до старта API и
-worker автоматически.
+Celery worker (обработка PDF и CPU-TTS). Миграции применяются до старта API и
+worker автоматически. API и PDF-worker не содержат PyTorch/Qwen; тяжёлые
+библиотеки находятся только в TTS-образе.
 
 Сервис будет доступен на `http://127.0.0.1:8000` (или на значении `APP_PORT`).
 Интерактивная спецификация API: `http://127.0.0.1:8000/docs`.
@@ -50,6 +51,19 @@ docker compose up --build -d
 инструкция задаются переменными `AI_READER_TTS_*`; задача и остальной код не
 привязаны к Qwen, поэтому новый провайдер подключается через адаптер TTS.
 
+### GPU для TTS (опционально)
+
+На машине с NVIDIA GPU, CUDA 12.8-совместимым драйвером и NVIDIA Container
+Toolkit замените CPU-worker на GPU-worker:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+```
+
+Этот режим собирает отдельный образ только для TTS и задаёт
+`AI_READER_TTS_DEVICE=cuda`. CPU-образ не содержит CUDA-библиотек. Если GPU
+недоступен, используйте обычную команду `docker compose up --build -d`.
+
 PostgreSQL, Redis и MinIO доступны только внутри Docker-сети. Для диагностики
 используйте `docker compose exec`; данные и кеш модели хранятся в named volumes.
 
@@ -68,6 +82,12 @@ uv run uvicorn app.main:app --reload
 ```bash
 uv run celery -A app.workers.celery_app worker -Q processing --loglevel=INFO
 uv run celery -A app.workers.celery_app worker -Q tts --loglevel=INFO
+```
+
+Для локального запуска Qwen TTS добавьте CPU-вариант зависимостей:
+
+```bash
+uv sync --all-groups --extra tts-cpu
 ```
 
 ## Команды разработки
