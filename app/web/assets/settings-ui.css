@@ -1,3 +1,8 @@
+.sidebar-links,
+.sidebar-quote {
+  display: none;
+}
+
 .settings-page {
   max-width: 760px;
 }
