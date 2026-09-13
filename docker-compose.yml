@@ -44,6 +44,9 @@ x-app-code: &app-code
 
 x-app-image: &app-image
   image: ai-reader:local
+  # This image is built locally by the API service. Never try to pull it from
+  # a registry before the one shared build has completed.
+  pull_policy: never
 
 x-app-build: &app-build
   build:
