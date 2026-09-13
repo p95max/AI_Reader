@@ -4,7 +4,14 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.config import Settings
-from app.services.ai_adapter import AIRequest, AIResponse, ImageInput, OpenAIAdapter, UsageContext
+from app.services.ai_adapter import (
+    AIRequest,
+    AIResponse,
+    ImageInput,
+    OpenAIAdapter,
+    TokenUsage,
+    UsageContext,
+)
 from app.services.usage_tracking import PersistentUsageReporter
 
 
@@ -128,6 +135,66 @@ async def test_openai_adapter_uses_selected_model_price_list() -> None:
 
     assert response.cost.total_cost == pytest.approx(0.0182)
     assert reporter.records[0][0].pricing_version == "catalog-2026-09"
+
+
+def test_openai_adapter_charges_cached_tokens_at_the_cached_rate() -> None:
+    adapter = OpenAIAdapter(
+        make_settings(
+            ai_input_cost_per_million_tokens=10.0,
+            ai_cached_input_cost_per_million_tokens=1.0,
+            ai_output_cost_per_million_tokens=20.0,
+        ),
+        client=FakeClient([]),
+        usage_reporter=RecordingUsageReporter(),
+    )
+
+    cost = adapter._calculate_cost(  # noqa: SLF001 - verifies the pricing invariant directly.
+        TokenUsage(input_tokens=1_000, cached_input_tokens=200, output_tokens=500)
+    )
+
+    assert cost.input_cost == pytest.approx(0.008)
+    assert cost.cached_input_cost == pytest.approx(0.0002)
+    assert cost.output_cost == pytest.approx(0.01)
+    assert cost.total_cost == pytest.approx(0.0182)
+
+
+@pytest.mark.asyncio
+async def test_openai_adapter_applies_a_changed_price_for_the_requested_model() -> None:
+    reporter = RecordingUsageReporter()
+    adapter = OpenAIAdapter(
+        make_settings(
+            ai_model_price_list={
+                "gpt-budget": {
+                    "input_per_million_tokens": 1.0,
+                    "cached_input_per_million_tokens": 0.1,
+                    "output_per_million_tokens": 2.0,
+                    "version": "budget-v1",
+                },
+                "gpt-premium": {
+                    "input_per_million_tokens": 10.0,
+                    "cached_input_per_million_tokens": 1.0,
+                    "output_per_million_tokens": 20.0,
+                    "version": "premium-v2",
+                },
+            }
+        ),
+        client=FakeClient([provider_response(), provider_response()]),
+        usage_reporter=reporter,
+    )
+
+    budget = await adapter.generate(
+        AIRequest(instructions="Narrate", input_text="Source", model="gpt-budget")
+    )
+    premium = await adapter.generate(
+        AIRequest(instructions="Narrate", input_text="Source", model="gpt-premium")
+    )
+
+    assert budget.cost.total_cost == pytest.approx(0.00182)
+    assert premium.cost.total_cost == pytest.approx(0.0182)
+    assert [request.pricing_version for request, _ in reporter.records] == [
+        "budget-v1",
+        "premium-v2",
+    ]
 
 
 @pytest.mark.asyncio
