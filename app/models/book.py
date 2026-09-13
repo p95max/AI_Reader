@@ -41,6 +41,7 @@ class Book(Base):
     tts_voice: Mapped[str] = mapped_column(String(100), default="Ryan")
     tts_speed: Mapped[str] = mapped_column(String(20), default="normal")
     tts_style: Mapped[str] = mapped_column(String(20), default="neutral")
+    code_mode: Mapped[str] = mapped_column(String(20), default="hybrid")
     status: Mapped[BookStatus] = mapped_column(
         Enum(
             BookStatus,

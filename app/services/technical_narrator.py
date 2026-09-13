@@ -3,6 +3,7 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 from app.services.ai_adapter import (
     AIAdapter,
@@ -18,14 +19,22 @@ from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock
 from app.services.visual_assets import VisualAsset
 
 
+class CodeMode(StrEnum):
+    EXPLAIN = "explain"
+    READ = "read"
+    SKIP = "skip"
+    HYBRID = "hybrid"
+
+
 @dataclass(frozen=True)
 class NarrationSettings:
     language: str = "ru"
     detail: str = "standard"
     model: str | None = None
+    code_mode: CodeMode = CodeMode.HYBRID
 
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 DEFAULT_NARRATION_SETTINGS = NarrationSettings()
 
 
@@ -42,15 +51,37 @@ class TechnicalNarrator:
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
-        return await self._narrate(
-            block_type="code",
-            source=block.text,
-            instructions=(
+        if settings.code_mode == CodeMode.SKIP:
+            return AIResponse(
+                text="Фрагмент кода пропущен по настройке чтения.",
+                model="code-mode-skip",
+                usage=TokenUsage(),
+                cost=UsageCost(input_cost=0, cached_input_cost=0, output_cost=0),
+                provider_response_id=None,
+                cached=False,
+            )
+        instructions = {
+            CodeMode.EXPLAIN: (
                 "Объясни фрагмент кода по-русски для прослушивания. Сначала назови его "
                 "назначение, затем кратко опиши ход выполнения, входы, выходы и важные "
                 "ограничения. Не читай синтаксис посимвольно и не добавляй факты, которых "
                 "нет в исходнике."
             ),
+            CodeMode.READ: (
+                "Прочитай фрагмент кода по-русски максимально близко к исходнику, но "
+                "преобразуй синтаксис в понятную устную форму: названия символов, отступы, "
+                "скобки и операторы произноси последовательно. Не объясняй смысл кода."
+            ),
+            CodeMode.HYBRID: (
+                "Кратко объясни фрагмент кода по-русски для прослушивания: назови назначение "
+                "и ключевую логику, затем прочитай только важные имена, вызовы и ограничения. "
+                "Не воспроизводи код посимвольно и не добавляй факты вне исходника."
+            ),
+        }[settings.code_mode]
+        return await self._narrate(
+            block_type="code",
+            source=block.text,
+            instructions=instructions,
             page_number=block.page_number,
             max_output_tokens=400,
             settings=settings,
@@ -161,6 +192,7 @@ class TechnicalNarrator:
                     "page_number": str(page_number),
                     "language": settings.language,
                     "detail": settings.detail,
+                    "code_mode": settings.code_mode.value,
                 },
                 model=settings.model,
                 images=images,

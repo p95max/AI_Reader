@@ -5,7 +5,7 @@ import pytest
 
 from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageContext, UsageCost
 from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
-from app.services.technical_narrator import NarrationSettings, TechnicalNarrator
+from app.services.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
 from app.services.visual_assets import VisualAsset
 
 
@@ -51,13 +51,16 @@ async def test_narrator_builds_code_request() -> None:
     adapter = RecordingAdapter()
     narrator = TechnicalNarrator(adapter)
 
-    response = await narrator.narrate_code(code_block())
+    response = await narrator.narrate_code(
+        code_block(), NarrationSettings(code_mode=CodeMode.EXPLAIN)
+    )
 
     assert response.text == "Spoken narration"
     request = adapter.requests[0]
     assert request.metadata["block_type"] == "code"
     assert request.metadata["page_number"] == "3"
     assert request.metadata["language"] == "ru"
+    assert request.metadata["code_mode"] == "explain"
     assert request.input_text.startswith("def total")
     assert "Не читай синтаксис посимвольно" in request.instructions
 
@@ -71,6 +74,41 @@ async def test_narrator_passes_book_usage_context_to_billable_request() -> None:
     await narrator.narrate_code(code_block(), usage_context=context)
 
     assert adapter.requests[0].usage_context == context
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code_mode", "instruction_fragment"),
+    (
+        (CodeMode.EXPLAIN, "Объясни фрагмент кода"),
+        (CodeMode.READ, "Прочитай фрагмент кода"),
+        (CodeMode.HYBRID, "Кратко объясни фрагмент кода"),
+    ),
+)
+async def test_narrator_selects_prompt_for_each_billable_code_mode(
+    code_mode: CodeMode, instruction_fragment: str
+) -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+
+    await narrator.narrate_code(code_block(), NarrationSettings(code_mode=code_mode))
+
+    assert len(adapter.requests) == 1
+    assert instruction_fragment in adapter.requests[0].instructions
+    assert adapter.requests[0].metadata["code_mode"] == code_mode.value
+
+
+@pytest.mark.asyncio
+async def test_narrator_skips_code_without_a_provider_request() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+
+    response = await narrator.narrate_code(code_block(), NarrationSettings(code_mode=CodeMode.SKIP))
+
+    assert adapter.requests == []
+    assert response.model == "code-mode-skip"
+    assert response.usage.total_tokens == 0
+    assert response.cost.total_cost == 0
 
 
 @pytest.mark.asyncio

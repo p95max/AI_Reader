@@ -333,6 +333,7 @@ async def create_book(
         tts_voice=settings.tts_voice,
         tts_speed="normal",
         tts_style="neutral",
+        code_mode="hybrid",
         status=BookStatus.UPLOADED,
     )
     session.add(book)
@@ -375,6 +376,7 @@ async def start_book_processing(
         book.tts_voice = payload.voice
         book.tts_speed = payload.speed.value
         book.tts_style = payload.style.value
+        book.code_mode = payload.code_mode.value
 
     book.status = BookStatus.PROCESSING
     await session.commit()
