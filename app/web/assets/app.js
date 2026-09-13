@@ -5,6 +5,9 @@ const pages = {
   "/upload": {
     title: "Add Book",
   },
+  "/player": {
+    title: "Player",
+  },
   "/settings": {
     title: "Settings",
   },
@@ -33,11 +36,13 @@ function navigation() {
   return [
     ["/library", "library", "Library"],
     ["/upload", "upload", "Add Book"],
+    ["/player", "player", "Player"],
     ["/settings", "settings", "Settings"],
   ]
     .map((path) => {
       const [href, iconName, label] = path;
-      const active = href === window.location.pathname ? ' aria-current="page"' : "";
+      const isPlayerPage = href === "/player" && window.location.pathname.startsWith("/books/");
+      const active = href === window.location.pathname || isPlayerPage ? ' aria-current="page"' : "";
       return `<a href="${href}"${active}>${navigationIcon(iconName)}${label}</a>`;
     })
     .join("");
@@ -47,6 +52,7 @@ function navigationIcon(name) {
   const paths = {
     library: '<path d="M4 5h16v15H4zM8 5v15M11 9h5M11 13h5"/>',
     upload: '<path d="M12 15V3m0 0L7 8m5-5 5 5M5 16v4h14v-4"/>',
+    player: '<path d="M5 4h14v16H5zM10 9l5 3-5 3z"/>',
     settings: '<path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm0-12.2v2m0 14v2m9-9h-2M5 12H3m15.4-6.4-1.4 1.4M7 17l-1.4 1.4m12.8 0L17 17M7 7 5.6 5.6"/>',
   };
   return `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name]}</svg>`;
@@ -257,6 +263,7 @@ async function renderBookPage() {
   `);
 
   const bookId = window.location.pathname.split("/").at(-1);
+  window.localStorage.setItem("ai-reader:last-book-id", bookId);
   const title = document.querySelector("#player-title");
   const author = document.querySelector("#player-author");
   const cover = document.querySelector("#player-cover");
@@ -485,10 +492,37 @@ async function renderBookPage() {
   }
 }
 
+async function renderPlayerLanding() {
+  document.querySelector("#app").innerHTML = shell(`
+    <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
+    <section class="feature-page"><a class="back-link" href="/library">← Library</a><h1>PLAYER</h1><p id="player-landing-status">Opening your most recent book…</p></section>
+  `);
+
+  const statusMessage = document.querySelector("#player-landing-status");
+  try {
+    const response = await fetch("/api/v1/books");
+    if (!response.ok) throw new Error("Unable to load books");
+    const books = await response.json();
+    const lastBookId = window.localStorage.getItem("ai-reader:last-book-id");
+    const book = books.find((item) => item.id === lastBookId)
+      ?? books.find((item) => item.status === "ready")
+      ?? books[0];
+    if (book) {
+      window.location.replace(`/books/${encodeURIComponent(book.id)}`);
+      return;
+    }
+    statusMessage.innerHTML = 'No books are available yet. <a class="back-link" href="/upload">Add a book</a> to start listening.';
+  } catch (error) {
+    statusMessage.textContent = "Unable to open the player. Please try again later.";
+  }
+}
+
 if (window.location.pathname === "/library") {
   renderLibrary();
 } else if (window.location.pathname === "/upload") {
   renderUpload();
+} else if (window.location.pathname === "/player") {
+  renderPlayerLanding();
 } else if (window.location.pathname.startsWith("/books/")) {
   renderBookPage();
 } else {

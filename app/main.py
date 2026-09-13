@@ -26,6 +26,7 @@ async def root() -> RedirectResponse:
 
 @app.get("/library", include_in_schema=False)
 @app.get("/upload", include_in_schema=False)
+@app.get("/player", include_in_schema=False)
 @app.get("/settings", include_in_schema=False)
 @app.get("/books/{book_id}", include_in_schema=False)
 async def frontend_page() -> FileResponse:

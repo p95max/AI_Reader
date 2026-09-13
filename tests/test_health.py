@@ -20,7 +20,7 @@ def test_root() -> None:
 
 
 def test_frontend_routes_serve_the_spa_for_deep_links() -> None:
-    for path in ("/library", "/upload", "/settings", "/books/book-id"):
+    for path in ("/library", "/upload", "/player", "/settings", "/books/book-id"):
         response = client.get(path)
 
         assert response.status_code == 200
