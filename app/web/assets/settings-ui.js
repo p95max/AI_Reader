@@ -1,11 +1,18 @@
+function normalizeTopbarTitle() {
+  const topbarTitle = document.querySelector(".topbar > span:first-child");
+  if (!topbarTitle) return;
+
+  const match = topbarTitle.textContent.trim().match(/^Web \/ Desktop \((.+)\)$/);
+  if (match) topbarTitle.textContent = match[1];
+}
+
 function enhanceSettingsPage() {
+  normalizeTopbarTitle();
+
   if (window.location.pathname !== "/settings") return;
 
   const form = document.querySelector("#preferences-form");
   if (!form || form.dataset.enhanced === "true") return;
-
-  const topbarTitle = document.querySelector(".topbar > span:first-child");
-  if (topbarTitle) topbarTitle.textContent = "Settings";
 
   const selects = [...form.querySelectorAll("label.voice-setting > select")];
   if (!selects.length) return;
