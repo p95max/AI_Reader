@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.book import BookStatus
 from app.models.chapter import ProcessingStatus
@@ -43,6 +43,18 @@ class BookAudioChunkRead(BaseModel):
     duration_milliseconds: int
     content_type: str
     stream_url: str
+
+
+class PlaybackPositionRead(BaseModel):
+    book_id: UUID
+    audio_chunk_id: UUID | None
+    position_milliseconds: int
+    updated_at: datetime | None
+
+
+class PlaybackPositionUpdate(BaseModel):
+    audio_chunk_id: UUID
+    position_milliseconds: int = Field(ge=0)
 
 
 class ContentChunkProgressRead(BaseModel):

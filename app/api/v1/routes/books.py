@@ -22,12 +22,15 @@ from app.db.session import get_db_session
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
+from app.models.playback_state import PlaybackState
 from app.schemas.books import (
     BookAudioChunkRead,
     BookLibraryItemRead,
     BookProcessingEstimateRead,
     BookProgressRead,
     BookRead,
+    PlaybackPositionRead,
+    PlaybackPositionUpdate,
 )
 from app.services.book_estimate import estimate_book_processing
 from app.services.book_library import build_book_library_item
@@ -192,6 +195,60 @@ async def stream_audio_chunk(
             headers=headers,
         )
     return Response(content=audio, media_type=chunk.content_type, headers=headers)
+
+
+@router.get("/{book_id}/playback", response_model=PlaybackPositionRead)
+async def get_playback_position(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> PlaybackPositionRead:
+    if await session.get(Book, book_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    playback = await session.get(PlaybackState, book_id)
+    if playback is None:
+        return PlaybackPositionRead(
+            book_id=book_id,
+            audio_chunk_id=None,
+            position_milliseconds=0,
+            updated_at=None,
+        )
+    return PlaybackPositionRead.model_validate(playback, from_attributes=True)
+
+
+@router.put("/{book_id}/playback", response_model=PlaybackPositionRead)
+async def save_playback_position(
+    book_id: UUID,
+    payload: PlaybackPositionUpdate,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> PlaybackPositionRead:
+    if await session.get(Book, book_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    audio_chunk = await session.scalar(
+        select(AudioChunk).where(
+            AudioChunk.id == payload.audio_chunk_id,
+            AudioChunk.book_id == book_id,
+            AudioChunk.status == AudioChunkStatus.READY,
+        )
+    )
+    if audio_chunk is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ready audio chunk not found"
+        )
+
+    playback = await session.get(PlaybackState, book_id)
+    if playback is None:
+        playback = PlaybackState(
+            book_id=book_id,
+            audio_chunk_id=audio_chunk.id,
+            position_milliseconds=payload.position_milliseconds,
+        )
+        session.add(playback)
+    else:
+        playback.audio_chunk_id = audio_chunk.id
+        playback.position_milliseconds = payload.position_milliseconds
+    await session.commit()
+    await session.refresh(playback)
+    return PlaybackPositionRead.model_validate(playback, from_attributes=True)
 
 
 @router.get("/{book_id}/progress", response_model=BookProgressRead)

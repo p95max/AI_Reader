@@ -270,6 +270,8 @@ async function renderBookPage() {
   let currentChunk = 0;
   let chapters = [];
   let selectedChapter = Math.max(0, Number(new URLSearchParams(window.location.search).get("chapter")) || 0);
+  let pendingSeekSeconds = null;
+  let lastPersistedAt = 0;
 
   const setControlsEnabled = (enabled) => {
     [playPause, previous, next, speed, ...skipButtons].forEach((control) => { control.disabled = !enabled; });
@@ -294,6 +296,25 @@ async function renderBookPage() {
     const playing = !audio.paused;
     playPause.textContent = playing ? "Ⅱ" : "▶";
     playPause.setAttribute("aria-label", playing ? "Pause" : "Play");
+  };
+  const persistPlayback = async ({ force = false, keepalive = false } = {}) => {
+    const chunk = chunks[currentChunk];
+    if (!chunk || !audio.src) return;
+    const positionMilliseconds = Math.max(0, Math.round((audio.currentTime || 0) * 1_000));
+    const now = Date.now();
+    if (!force && now - lastPersistedAt < 5_000) return;
+    lastPersistedAt = now;
+    try {
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/playback`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_chunk_id: chunk.id, position_milliseconds: positionMilliseconds }),
+        keepalive,
+      });
+      if (!response.ok && !keepalive) throw new Error("Unable to save playback position");
+    } catch (error) {
+      if (!keepalive) statusMessage.textContent = "Playback is active, but the position could not be saved.";
+    }
   };
   const drawChapterNavigation = () => {
     if (!chapters.length) {
@@ -322,10 +343,12 @@ async function renderBookPage() {
       drawChapterNavigation();
     }));
   };
-  const selectChunk = async (index, shouldPlay = false) => {
+  const selectChunk = async (index, shouldPlay = false, startAtMilliseconds = 0) => {
     if (index < 0 || index >= chunks.length) return;
+    if (audio.src && index !== currentChunk) await persistPlayback({ force: true });
     currentChunk = index;
     const chunk = chunks[currentChunk];
+    pendingSeekSeconds = Math.max(0, startAtMilliseconds / 1_000);
     audio.src = chunk.stream_url;
     audio.playbackRate = Number(speed.value);
     audio.load();
@@ -362,26 +385,40 @@ async function renderBookPage() {
   }));
   speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
   seek.addEventListener("input", () => { audio.currentTime = Number(seek.value); updateTimeline(); });
-  audio.addEventListener("loadedmetadata", updateTimeline);
-  audio.addEventListener("timeupdate", updateTimeline);
+  seek.addEventListener("change", () => { persistPlayback({ force: true }); });
+  audio.addEventListener("loadedmetadata", () => {
+    if (pendingSeekSeconds !== null) {
+      audio.currentTime = Math.min(pendingSeekSeconds, duration());
+      pendingSeekSeconds = null;
+    }
+    updateTimeline();
+  });
+  audio.addEventListener("timeupdate", () => { updateTimeline(); persistPlayback(); });
   audio.addEventListener("play", setPlayButton);
-  audio.addEventListener("pause", setPlayButton);
-  audio.addEventListener("ended", () => {
+  audio.addEventListener("pause", () => { setPlayButton(); persistPlayback({ force: true }); });
+  audio.addEventListener("ended", async () => {
+    await persistPlayback({ force: true });
     if (currentChunk < chunks.length - 1) selectChunk(currentChunk + 1, true);
     else { statusMessage.textContent = "Book playback complete"; setPlayButton(); }
   });
   audio.addEventListener("error", () => { statusMessage.textContent = "This audio segment could not be loaded."; });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") persistPlayback({ force: true, keepalive: true });
+  });
+  window.addEventListener("pagehide", () => { persistPlayback({ force: true, keepalive: true }); });
 
   try {
-    const [bookResponse, audioResponse, progressResponse] = await Promise.all([
+    const [bookResponse, audioResponse, progressResponse, playbackResponse] = await Promise.all([
       fetch(`/api/v1/books/${encodeURIComponent(bookId)}`),
       fetch(`/api/v1/books/${encodeURIComponent(bookId)}/audio`),
       fetch(`/api/v1/books/${encodeURIComponent(bookId)}/progress`),
+      fetch(`/api/v1/books/${encodeURIComponent(bookId)}/playback`),
     ]);
-    if (!bookResponse.ok || !audioResponse.ok || !progressResponse.ok) throw new Error("Unable to load book player");
+    if (!bookResponse.ok || !audioResponse.ok || !progressResponse.ok || !playbackResponse.ok) throw new Error("Unable to load book player");
     const book = await bookResponse.json();
     chunks = await audioResponse.json();
     const progress = await progressResponse.json();
+    const playback = await playbackResponse.json();
     chapters = progress.chapters;
     title.textContent = book.title;
     author.textContent = book.author;
@@ -393,7 +430,13 @@ async function renderBookPage() {
       statusMessage.textContent = "Audio is still processing. Refresh this page when a segment is ready.";
       return;
     }
-    await selectChunk(0);
+    const resumeChunk = chunks.findIndex((chunk) => chunk.id === playback.audio_chunk_id);
+    const resumeIndex = resumeChunk >= 0 ? resumeChunk : 0;
+    const resumeAtMilliseconds = resumeChunk >= 0 ? playback.position_milliseconds : 0;
+    await selectChunk(resumeIndex, false, resumeAtMilliseconds);
+    if (resumeAtMilliseconds > 0) {
+      statusMessage.textContent = `Resume position restored at ${formatPlaybackTime(resumeAtMilliseconds / 1_000)}.`;
+    }
   } catch (error) {
     statusMessage.textContent = "Unable to load this book. Please return to your library and try again.";
   }
