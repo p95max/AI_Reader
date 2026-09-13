@@ -14,6 +14,7 @@ from app.services.audio_generation import (
 )
 from app.services.storage import ObjectStorageError
 from app.services.tts import SpeechSpeed, TTSError
+from app.services.tts_usage import TTSUsageCostCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,16 @@ class AudioChunkProcessingError(RuntimeError):
 class ResilientTTSProcessor:
     """Generates only missing chunks and records every successful checkpoint."""
 
-    def __init__(self, generator: AudioChunkGenerator, store: AudioChunkStore) -> None:
+    def __init__(
+        self,
+        generator: AudioChunkGenerator,
+        store: AudioChunkStore,
+        *,
+        cost_calculator: TTSUsageCostCalculator | None = None,
+    ) -> None:
         self._generator = generator
         self._store = store
+        self._cost_calculator = cost_calculator
 
     async def process(
         self,
@@ -79,12 +87,20 @@ class ResilientTTSProcessor:
                 ) from error
 
             elapsed_ms = round((perf_counter() - started_at) * 1_000)
+            tts_cost_usd = 0.0
+            if self._cost_calculator is not None:
+                usage = self._cost_calculator.calculate(
+                    generated_audio_milliseconds=chunk.duration_milliseconds,
+                    generation_time_milliseconds=elapsed_ms,
+                )
+                tts_cost_usd = usage.total_cost_usd
             await self._store.mark_ready(
                 book_id,
                 chunk,
                 voice=voice,
                 attempt_count=attempt_count,
                 generation_time_milliseconds=elapsed_ms,
+                tts_cost_usd=tts_cost_usd,
             )
             logger.info(
                 "tts_chunk_generated",
@@ -93,6 +109,7 @@ class ResilientTTSProcessor:
                     "chunk": chunk_index,
                     "duration_ms": chunk.duration_milliseconds,
                     "generation_ms": elapsed_ms,
+                    "tts_cost_usd": tts_cost_usd,
                 },
             )
             generated.append(chunk)

@@ -2,7 +2,17 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +55,7 @@ class AudioChunk(Base):
     voice: Mapped[str | None] = mapped_column(String(100))
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     generation_time_milliseconds: Mapped[int | None] = mapped_column(Integer)
+    tts_cost_usd: Mapped[float] = mapped_column(Numeric(16, 8), default=0)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

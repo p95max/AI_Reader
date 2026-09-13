@@ -30,6 +30,7 @@ class AudioChunkStore(Protocol):
         voice: str,
         attempt_count: int,
         generation_time_milliseconds: int,
+        tts_cost_usd: float,
     ) -> None: ...
 
     async def mark_failed(
@@ -106,6 +107,7 @@ class SQLAlchemyAudioChunkStore:
         voice: str,
         attempt_count: int,
         generation_time_milliseconds: int,
+        tts_cost_usd: float,
     ) -> None:
         async with self._session_factory() as session:
             record = await self._get_chunk(session, book_id, chunk.chunk_index)
@@ -122,6 +124,7 @@ class SQLAlchemyAudioChunkStore:
                         voice=voice,
                         attempt_count=attempt_count,
                         generation_time_milliseconds=generation_time_milliseconds,
+                        tts_cost_usd=tts_cost_usd,
                     )
                 )
             else:
@@ -133,6 +136,7 @@ class SQLAlchemyAudioChunkStore:
                 record.voice = voice
                 record.attempt_count = attempt_count
                 record.generation_time_milliseconds = generation_time_milliseconds
+                record.tts_cost_usd = tts_cost_usd
                 record.error_message = None
             await session.commit()
 

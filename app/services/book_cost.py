@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book
 from app.models.llm_usage import LLMUsageRecord
 
@@ -23,6 +24,10 @@ class BookCostComparison:
     request_count: int
     estimate_model_name: str
     estimate_pricing_version: str
+    actual_tts_cost_usd: float
+    generated_audio_seconds: int
+    tts_generation_seconds: int
+    total_processing_cost_usd: float
 
 
 class BookCostService:
@@ -44,8 +49,21 @@ class BookCostService:
                 ).where(LLMUsageRecord.book_id == book_id)
             )
         ).one()
+        tts_row = (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(AudioChunk.tts_cost_usd), 0),
+                    func.coalesce(func.sum(AudioChunk.duration_milliseconds), 0),
+                    func.coalesce(func.sum(AudioChunk.generation_time_milliseconds), 0),
+                ).where(
+                    AudioChunk.book_id == book_id,
+                    AudioChunk.status == AudioChunkStatus.READY,
+                )
+            )
+        ).one()
         estimated = float(book.estimated_ai_cost_usd)
         actual = float(row[0])
+        actual_tts = float(tts_row[0])
         return BookCostComparison(
             estimated_cost_usd=estimated,
             actual_cost_usd=actual,
@@ -56,4 +74,8 @@ class BookCostService:
             request_count=int(row[4]),
             estimate_model_name=book.estimate_model_name,
             estimate_pricing_version=book.estimate_pricing_version,
+            actual_tts_cost_usd=actual_tts,
+            generated_audio_seconds=round(int(tts_row[1]) / 1_000),
+            tts_generation_seconds=round(int(tts_row[2]) / 1_000),
+            total_processing_cost_usd=round(actual + actual_tts, 8),
         )

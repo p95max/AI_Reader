@@ -49,6 +49,10 @@ class BookCostRead(BaseModel):
     request_count: int
     estimate_model_name: str
     estimate_pricing_version: str
+    actual_tts_cost_usd: float
+    generated_audio_seconds: int
+    tts_generation_seconds: int
+    total_processing_cost_usd: float
 
 
 class BookAudioChunkRead(BaseModel):

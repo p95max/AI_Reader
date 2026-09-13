@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     tts_voice: str = "Ryan"
     tts_language: str = "Russian"
     tts_instruction: str = "Говори ясно, естественно и спокойно."
+    tts_external_cost_per_audio_hour_usd: float = Field(default=0.0, ge=0)
+    tts_gpu_cost_per_hour_usd: float = Field(default=0.0, ge=0)
     tts_chunk_max_characters: int = Field(default=1_200, ge=100)
     tts_max_attempts: int = Field(default=3, ge=1)
     progressive_priority_chapter_count: int = Field(default=2, ge=1)

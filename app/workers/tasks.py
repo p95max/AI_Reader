@@ -16,6 +16,7 @@ from app.services.progressive_processing_store import SQLAlchemyProgressiveProce
 from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
 from app.services.storage import get_object_storage
 from app.services.tts import SpeechRequest, SpeechSpeed, get_tts_synthesizer
+from app.services.tts_usage import TTSUsageCostCalculator
 from app.workers.celery_app import celery_app
 
 
@@ -105,7 +106,11 @@ def generate_audio_chunks(
         get_object_storage(),
         chunker=NarrationChunker(settings.tts_chunk_max_characters),
     )
-    processor = ResilientTTSProcessor(generator, SQLAlchemyAudioChunkStore())
+    processor = ResilientTTSProcessor(
+        generator,
+        SQLAlchemyAudioChunkStore(),
+        cost_calculator=TTSUsageCostCalculator(settings),
+    )
     chunks = asyncio.run(
         processor.process(
             parsed_book_id,

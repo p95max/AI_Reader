@@ -73,6 +73,11 @@ AI_READER_AI_MODEL_PRICE_LIST='{"gpt-5.6-luna":{"input_per_million_tokens":2.0,"
 Если для модели нет записи, используются совместимые переменные
 `AI_READER_AI_*_COST_PER_MILLION_TOKENS` и `AI_READER_AI_PRICING_VERSION`.
 
+Для TTS укажите цену внешнего провайдера за час готового аудио через
+`AI_READER_TTS_EXTERNAL_COST_PER_AUDIO_HOUR_USD`. При локальной CUDA-генерации
+можно дополнительно учесть реальное время работы GPU переменной
+`AI_READER_TTS_GPU_COST_PER_HOUR_USD`. Оба значения по умолчанию равны нулю.
+
 ### GPU для TTS (опционально)
 
 На машине с NVIDIA GPU, CUDA 12.8-совместимым драйвером и NVIDIA Container
