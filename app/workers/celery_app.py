@@ -18,6 +18,7 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_routes={
+        "ai_reader.books.*": {"queue": "processing"},
         "ai_reader.processing.*": {"queue": "processing"},
         "ai_reader.tts.*": {"queue": "tts"},
     },

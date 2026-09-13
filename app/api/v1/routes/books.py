@@ -11,7 +11,13 @@ from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.schemas.books import BookLibraryItemRead, BookProgressRead, BookRead
+from app.schemas.books import (
+    BookLibraryItemRead,
+    BookProcessingEstimateRead,
+    BookProgressRead,
+    BookRead,
+)
+from app.services.book_estimate import estimate_book_processing
 from app.services.book_library import build_book_library_item
 from app.services.book_progress import BookProgressService
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
@@ -23,6 +29,25 @@ router = APIRouter()
 def _normalized_filename(upload: UploadFile) -> str:
     filename = Path(upload.filename or "book.pdf").name.strip()
     return filename[:255] or "book.pdf"
+
+
+@router.get("/estimate", response_model=BookProcessingEstimateRead)
+async def estimate_processing(
+    file_size_bytes: Annotated[int, Query(ge=1)],
+) -> BookProcessingEstimateRead:
+    settings = get_settings()
+    if file_size_bytes > settings.max_pdf_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="PDF exceeds the configured size limit",
+        )
+    return BookProcessingEstimateRead.model_validate(
+        estimate_book_processing(
+            file_size_bytes,
+            input_cost_per_million_tokens=settings.ai_input_cost_per_million_tokens,
+            output_cost_per_million_tokens=settings.ai_output_cost_per_million_tokens,
+        )
+    )
 
 
 @router.get("", response_model=list[BookLibraryItemRead])
@@ -134,6 +159,37 @@ async def create_book(
     finally:
         temporary_path.unlink(missing_ok=True)
 
+    return book
+
+
+@router.post("/{book_id}/process", response_model=BookRead, status_code=status.HTTP_202_ACCEPTED)
+async def start_book_processing(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Book:
+    """Queue PDF structure extraction after the client confirms processing settings."""
+    book = await session.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    if book.status == BookStatus.READY:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Book is already ready")
+    if book.status == BookStatus.PROCESSING:
+        return book
+
+    book.status = BookStatus.PROCESSING
+    await session.commit()
+    await session.refresh(book)
+    try:
+        from app.workers.tasks import build_book_structure
+
+        build_book_structure.apply_async(args=[str(book.id)], queue="processing")
+    except Exception as error:
+        book.status = BookStatus.UPLOADED
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Processing queue is unavailable; the uploaded book can be retried",
+        ) from error
     return book
 
 

@@ -29,6 +29,14 @@ class BookLibraryItemRead(BaseModel):
     progress_percent: float
 
 
+class BookProcessingEstimateRead(BaseModel):
+    estimated_input_tokens: int
+    estimated_output_tokens: int
+    estimated_total_tokens: int
+    estimated_ai_cost_usd: float
+    estimated_audio_seconds: int
+
+
 class ContentChunkProgressRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

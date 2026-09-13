@@ -38,3 +38,10 @@ def test_books_list_api_is_exposed_in_openapi() -> None:
     schema = app.openapi()
 
     assert "get" in schema["paths"]["/api/v1/books"]
+
+
+def test_processing_endpoints_are_exposed_in_openapi() -> None:
+    schema = app.openapi()
+
+    assert "get" in schema["paths"]["/api/v1/books/estimate"]
+    assert "post" in schema["paths"]["/api/v1/books/{book_id}/process"]

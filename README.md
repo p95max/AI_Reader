@@ -18,7 +18,7 @@ uv run uvicorn app.main:app --reload
 В отдельном терминале запустите worker задач:
 
 ```bash
-uv run celery -A app.workers.celery_app worker --loglevel=INFO
+uv run celery -A app.workers.celery_app worker -Q processing --loglevel=INFO
 ```
 
 TTS использует отдельную очередь и воркер (первый синтез загрузит модель, заданную
