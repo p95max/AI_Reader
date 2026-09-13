@@ -242,6 +242,7 @@ async function renderBookPage() {
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
     <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div></div>
     <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></section>
+    <section class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></section>
     </section>
   `);
 
@@ -260,8 +261,15 @@ async function renderBookPage() {
   const next = document.querySelector("#next-chunk");
   const speed = document.querySelector("#playback-speed");
   const skipButtons = [...document.querySelectorAll("[data-skip]")];
+  const chapterSummary = document.querySelector("#chapter-summary");
+  const chapterList = document.querySelector("#chapter-list");
+  const previousChapter = document.querySelector("#previous-chapter");
+  const nextChapter = document.querySelector("#next-chapter");
+  const nextAvailableChunk = document.querySelector("#next-available-chunk");
   let chunks = [];
   let currentChunk = 0;
+  let chapters = [];
+  let selectedChapter = Math.max(0, Number(new URLSearchParams(window.location.search).get("chapter")) || 0);
 
   const setControlsEnabled = (enabled) => {
     [playPause, previous, next, speed, ...skipButtons].forEach((control) => { control.disabled = !enabled; });
@@ -286,6 +294,33 @@ async function renderBookPage() {
     const playing = !audio.paused;
     playPause.textContent = playing ? "Ⅱ" : "▶";
     playPause.setAttribute("aria-label", playing ? "Pause" : "Play");
+  };
+  const drawChapterNavigation = () => {
+    if (!chapters.length) {
+      chapterSummary.textContent = "Book structure is still being prepared.";
+      chapterList.innerHTML = '<li class="chapter-list__empty">Chapters will appear here as soon as PDF extraction finishes.</li>';
+      nextAvailableChunk.textContent = "The next available chunk is still being generated.";
+      previousChapter.disabled = true;
+      nextChapter.disabled = true;
+      return;
+    }
+    selectedChapter = Math.min(selectedChapter, chapters.length - 1);
+    const selected = chapters[selectedChapter];
+    chapterSummary.textContent = `Viewing Chapter ${selected.chapter_index + 1} · pages ${selected.start_page}–${selected.end_page} · ${selected.ready_chunks}/${selected.total_chunks} chunks ready`;
+    chapterList.innerHTML = chapters.map((chapter, index) => `
+      <li><button type="button" class="chapter-item${index === selectedChapter ? " is-selected" : ""}" data-chapter-index="${index}" aria-current="${index === selectedChapter ? "true" : "false"}"><span><b>CH ${String(chapter.chapter_index + 1).padStart(2, "0")}</b><strong>${escapeHtml(chapter.title)}</strong></span><small class="status--${escapeHtml(chapter.status)}">${statusLabel(chapter.status)} · ${chapter.ready_chunks}/${chapter.total_chunks}</small></button></li>
+    `).join("");
+    const nextReady = chapters.flatMap((chapter) => chapter.chunks.map((chunk) => ({ chapter, chunk }))).find(({ chunk }) => chunk.status === "ready");
+    nextAvailableChunk.textContent = nextReady
+      ? `Next available chunk: Chapter ${nextReady.chapter.chapter_index + 1}, segment ${nextReady.chunk.chunk_index + 1}.`
+      : "The next available chunk is still being generated.";
+    previousChapter.disabled = selectedChapter === 0;
+    nextChapter.disabled = selectedChapter === chapters.length - 1;
+    chapterList.querySelectorAll("[data-chapter-index]").forEach((button) => button.addEventListener("click", () => {
+      selectedChapter = Number(button.dataset.chapterIndex);
+      window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
+      drawChapterNavigation();
+    }));
   };
   const selectChunk = async (index, shouldPlay = false) => {
     if (index < 0 || index >= chunks.length) return;
@@ -312,6 +347,16 @@ async function renderBookPage() {
   });
   previous.addEventListener("click", () => selectChunk(currentChunk - 1, !audio.paused));
   next.addEventListener("click", () => selectChunk(currentChunk + 1, !audio.paused));
+  previousChapter.addEventListener("click", () => {
+    selectedChapter -= 1;
+    window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
+    drawChapterNavigation();
+  });
+  nextChapter.addEventListener("click", () => {
+    selectedChapter += 1;
+    window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
+    drawChapterNavigation();
+  });
   skipButtons.forEach((button) => button.addEventListener("click", () => {
     audio.currentTime = Math.max(0, Math.min(duration(), audio.currentTime + Number(button.dataset.skip)));
   }));
@@ -328,17 +373,21 @@ async function renderBookPage() {
   audio.addEventListener("error", () => { statusMessage.textContent = "This audio segment could not be loaded."; });
 
   try {
-    const [bookResponse, audioResponse] = await Promise.all([
+    const [bookResponse, audioResponse, progressResponse] = await Promise.all([
       fetch(`/api/v1/books/${encodeURIComponent(bookId)}`),
       fetch(`/api/v1/books/${encodeURIComponent(bookId)}/audio`),
+      fetch(`/api/v1/books/${encodeURIComponent(bookId)}/progress`),
     ]);
-    if (!bookResponse.ok || !audioResponse.ok) throw new Error("Unable to load book player");
+    if (!bookResponse.ok || !audioResponse.ok || !progressResponse.ok) throw new Error("Unable to load book player");
     const book = await bookResponse.json();
     chunks = await audioResponse.json();
+    const progress = await progressResponse.json();
+    chapters = progress.chapters;
     title.textContent = book.title;
     author.textContent = book.author;
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
     cover.querySelector("b").textContent = book.title.slice(0, 1).toUpperCase() || "A";
+    drawChapterNavigation();
     setControlsEnabled(chunks.length > 0);
     if (!chunks.length) {
       statusMessage.textContent = "Audio is still processing. Refresh this page when a segment is ready.";
