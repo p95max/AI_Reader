@@ -58,6 +58,21 @@ docker compose up --build -d
 инструкция задаются переменными `AI_READER_TTS_*`; задача и остальной код не
 привязаны к Qwen, поэтому новый провайдер подключается через адаптер TTS.
 
+### Стоимость LLM
+
+Стоимость не задана во frontend: API рассчитывает предварительную оценку при
+загрузке и возвращает фактические затраты, накопленные во время обработки, по
+`GET /api/v1/books/{book_id}/cost`. Прайс-лист задаётся JSON-переменной
+`AI_READER_AI_MODEL_PRICE_LIST`; ключ — идентификатор модели, суммы — USD за
+миллион токенов:
+
+```bash
+AI_READER_AI_MODEL_PRICE_LIST='{"gpt-5.6-luna":{"input_per_million_tokens":2.0,"cached_input_per_million_tokens":0.5,"output_per_million_tokens":8.0,"version":"2026-09"}}'
+```
+
+Если для модели нет записи, используются совместимые переменные
+`AI_READER_AI_*_COST_PER_MILLION_TOKENS` и `AI_READER_AI_PRICING_VERSION`.
+
 ### GPU для TTS (опционально)
 
 На машине с NVIDIA GPU, CUDA 12.8-совместимым драйвером и NVIDIA Container

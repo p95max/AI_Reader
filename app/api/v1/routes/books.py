@@ -25,6 +25,7 @@ from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.models.playback_state import PlaybackState
 from app.schemas.books import (
     BookAudioChunkRead,
+    BookCostRead,
     BookLibraryItemRead,
     BookProcessingEstimateRead,
     BookProgressRead,
@@ -32,7 +33,8 @@ from app.schemas.books import (
     PlaybackPositionRead,
     PlaybackPositionUpdate,
 )
-from app.services.book_estimate import estimate_book_processing
+from app.services.book_cost import BookCostService
+from app.services.book_estimate import estimate_book_processing_with_pricing
 from app.services.book_library import build_book_library_item
 from app.services.book_progress import BookProgressService
 from app.services.ownership import get_local_user_id
@@ -57,12 +59,16 @@ async def estimate_processing(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="PDF exceeds the configured size limit",
         )
-    return BookProcessingEstimateRead.model_validate(
-        estimate_book_processing(
-            file_size_bytes,
-            input_cost_per_million_tokens=settings.ai_input_cost_per_million_tokens,
-            output_cost_per_million_tokens=settings.ai_output_cost_per_million_tokens,
-        )
+    pricing = settings.pricing_for_model()
+    estimate = estimate_book_processing_with_pricing(file_size_bytes, pricing=pricing)
+    return BookProcessingEstimateRead(
+        estimated_input_tokens=estimate.estimated_input_tokens,
+        estimated_output_tokens=estimate.estimated_output_tokens,
+        estimated_total_tokens=estimate.estimated_total_tokens,
+        estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
+        estimated_audio_seconds=estimate.estimated_audio_seconds,
+        model_name=settings.ai_model,
+        pricing_version=pricing.version,
     )
 
 
@@ -116,6 +122,20 @@ async def get_book(
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     return book
+
+
+@router.get("/{book_id}/cost", response_model=BookCostRead)
+async def get_book_cost(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> BookCostRead:
+    try:
+        cost = await BookCostService(session).get(book_id)
+    except LookupError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Book not found"
+        ) from error
+    return BookCostRead(**cost.__dict__)
 
 
 @router.get("/{book_id}/audio", response_model=list[BookAudioChunkRead])
@@ -293,6 +313,8 @@ async def create_book(
         ) from error
 
     filename = _normalized_filename(file)
+    pricing = settings.pricing_for_model()
+    estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
     book = Book(
         user_id=await get_local_user_id(session),
         title=Path(filename).stem[:255] or "Untitled book",
@@ -301,6 +323,11 @@ async def create_book(
         storage_key="pending",
         content_type="application/pdf",
         size_bytes=size_bytes,
+        estimated_input_tokens=estimate.estimated_input_tokens,
+        estimated_output_tokens=estimate.estimated_output_tokens,
+        estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
+        estimate_model_name=settings.ai_model,
+        estimate_pricing_version=pricing.version,
         status=BookStatus.UPLOADED,
     )
     session.add(book)

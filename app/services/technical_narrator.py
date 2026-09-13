@@ -10,6 +10,7 @@ from app.services.ai_adapter import (
     AIResponse,
     ImageInput,
     TokenUsage,
+    UsageContext,
     UsageCost,
 )
 from app.services.narration_cache import NarrationCache
@@ -39,6 +40,7 @@ class TechnicalNarrator:
         self,
         block: TextBlock,
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
+        usage_context: UsageContext | None = None,
     ) -> AIResponse:
         return await self._narrate(
             block_type="code",
@@ -52,12 +54,14 @@ class TechnicalNarrator:
             page_number=block.page_number,
             max_output_tokens=400,
             settings=settings,
+            usage_context=usage_context,
         )
 
     async def narrate_table(
         self,
         block: TableBlock,
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
+        usage_context: UsageContext | None = None,
     ) -> AIResponse:
         return await self._narrate(
             block_type="table",
@@ -70,12 +74,14 @@ class TechnicalNarrator:
             page_number=block.page_number,
             max_output_tokens=500,
             settings=settings,
+            usage_context=usage_context,
         )
 
     async def narrate_formula(
         self,
         block: FormulaBlock,
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
+        usage_context: UsageContext | None = None,
     ) -> AIResponse:
         return await self._narrate(
             block_type="formula",
@@ -89,12 +95,14 @@ class TechnicalNarrator:
             page_number=block.page_number,
             max_output_tokens=250,
             settings=settings,
+            usage_context=usage_context,
         )
 
     async def narrate_visual(
         self,
         asset: VisualAsset,
         settings: NarrationSettings = DEFAULT_NARRATION_SETTINGS,
+        usage_context: UsageContext | None = None,
     ) -> AIResponse:
         visual_kind = "схема" if asset.visual.kind == "diagram" else "изображение"
         source = hashlib.sha256(asset.image_data).hexdigest()
@@ -114,6 +122,7 @@ class TechnicalNarrator:
             max_output_tokens=400,
             settings=settings,
             images=(ImageInput(data=asset.image_data, media_type=asset.media_type),),
+            usage_context=usage_context,
         )
 
     async def _narrate(
@@ -127,6 +136,7 @@ class TechnicalNarrator:
         settings: NarrationSettings,
         input_text: str | None = None,
         images: tuple[ImageInput, ...] = (),
+        usage_context: UsageContext | None = None,
     ) -> AIResponse:
         cache_key = self._cache_key(block_type, source, instructions, settings)
         if self._cache is not None:
@@ -154,6 +164,7 @@ class TechnicalNarrator:
                 },
                 model=settings.model,
                 images=images,
+                usage_context=usage_context,
             )
         )
         if self._cache is not None:

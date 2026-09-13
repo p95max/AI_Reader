@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,6 +33,11 @@ class Book(Base):
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
     content_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
     size_bytes: Mapped[int] = mapped_column(BigInteger)
+    estimated_input_tokens: Mapped[int] = mapped_column(BigInteger, default=0)
+    estimated_output_tokens: Mapped[int] = mapped_column(BigInteger, default=0)
+    estimated_ai_cost_usd: Mapped[float] = mapped_column(Numeric(16, 8), default=0)
+    estimate_model_name: Mapped[str] = mapped_column(String(255), default="")
+    estimate_pricing_version: Mapped[str] = mapped_column(String(100), default="default")
     status: Mapped[BookStatus] = mapped_column(
         Enum(
             BookStatus,

@@ -1,8 +1,17 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ModelPricing(BaseModel):
+    """Versioned price list entry, expressed in USD per one million tokens."""
+
+    input_per_million_tokens: float = Field(default=0.0, ge=0)
+    cached_input_per_million_tokens: float = Field(default=0.0, ge=0)
+    output_per_million_tokens: float = Field(default=0.0, ge=0)
+    version: str = Field(default="default", min_length=1, max_length=100)
 
 
 class Settings(BaseSettings):
@@ -30,6 +39,7 @@ class Settings(BaseSettings):
     ai_cached_input_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     ai_output_cost_per_million_tokens: float = Field(default=0.0, ge=0)
     ai_pricing_version: str = Field(default="default", min_length=1, max_length=100)
+    ai_model_price_list: dict[str, ModelPricing] = Field(default_factory=dict)
     narration_cache_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, ge=1)
     # TTS is deliberately provider-agnostic: another backend can be registered without
     # changing Celery tasks or callers.
@@ -49,6 +59,19 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="AI_READER_",
     )
+
+    def pricing_for_model(self, model: str | None = None) -> ModelPricing:
+        """Resolve the configured model entry, retaining legacy env vars as a safe fallback."""
+        resolved_model = model or self.ai_model
+        configured = self.ai_model_price_list.get(resolved_model)
+        if configured is not None:
+            return configured
+        return ModelPricing(
+            input_per_million_tokens=self.ai_input_cost_per_million_tokens,
+            cached_input_per_million_tokens=self.ai_cached_input_cost_per_million_tokens,
+            output_per_million_tokens=self.ai_output_cost_per_million_tokens,
+            version=self.ai_pricing_version,
+        )
 
 
 @lru_cache

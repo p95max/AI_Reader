@@ -1,6 +1,10 @@
 import pytest
 
-from app.services.book_estimate import estimate_book_processing
+from app.core.config import ModelPricing, Settings
+from app.services.book_estimate import (
+    estimate_book_processing,
+    estimate_book_processing_with_pricing,
+)
 
 
 def test_estimate_uses_configured_token_pricing() -> None:
@@ -15,6 +19,27 @@ def test_estimate_uses_configured_token_pricing() -> None:
     assert estimate.estimated_total_tokens == 12_500
     assert estimate.estimated_ai_cost_usd == 0.04
     assert estimate.estimated_audio_seconds > 0
+
+
+def test_estimate_uses_versioned_model_price_list() -> None:
+    settings = Settings(
+        ai_model="gpt-costed",
+        ai_model_price_list={
+            "gpt-costed": {
+                "input_per_million_tokens": 2.0,
+                "cached_input_per_million_tokens": 0.5,
+                "output_per_million_tokens": 8.0,
+                "version": "2026-09",
+            }
+        },
+    )
+
+    pricing = settings.pricing_for_model()
+    estimate = estimate_book_processing_with_pricing(80_000, pricing=pricing)
+
+    assert pricing.version == "2026-09"
+    assert estimate.estimated_ai_cost_usd == 0.04
+    assert settings.pricing_for_model("unknown") == ModelPricing()
 
 
 @pytest.mark.parametrize("size", [0, -1])

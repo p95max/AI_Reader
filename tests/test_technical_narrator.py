@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
+from uuid import uuid4
 
 import pytest
 
-from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageCost
+from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageContext, UsageCost
 from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
 from app.services.technical_narrator import NarrationSettings, TechnicalNarrator
 from app.services.visual_assets import VisualAsset
@@ -59,6 +60,17 @@ async def test_narrator_builds_code_request() -> None:
     assert request.metadata["language"] == "ru"
     assert request.input_text.startswith("def total")
     assert "Не читай синтаксис посимвольно" in request.instructions
+
+
+@pytest.mark.asyncio
+async def test_narrator_passes_book_usage_context_to_billable_request() -> None:
+    adapter = RecordingAdapter()
+    narrator = TechnicalNarrator(adapter)
+    context = UsageContext(book_id=uuid4())
+
+    await narrator.narrate_code(code_block(), usage_context=context)
+
+    assert adapter.requests[0].usage_context == context
 
 
 @pytest.mark.asyncio

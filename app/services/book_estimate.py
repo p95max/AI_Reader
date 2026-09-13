@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.core.config import ModelPricing
+
 
 @dataclass(frozen=True, slots=True)
 class BookProcessingEstimate:
@@ -45,4 +47,17 @@ def estimate_book_processing(
         estimated_total_tokens=estimated_total_tokens,
         estimated_ai_cost_usd=estimated_ai_cost_usd,
         estimated_audio_seconds=round(estimated_total_tokens * 0.28),
+    )
+
+
+def estimate_book_processing_with_pricing(
+    file_size_bytes: int,
+    *,
+    pricing: ModelPricing,
+) -> BookProcessingEstimate:
+    """Use a selected model's versioned price list for the pre-processing estimate."""
+    return estimate_book_processing(
+        file_size_bytes,
+        input_cost_per_million_tokens=pricing.input_per_million_tokens,
+        output_cost_per_million_tokens=pricing.output_per_million_tokens,
     )

@@ -251,6 +251,7 @@ async function renderBookPage() {
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
     <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div></div>
     <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></section>
+    <section class="cost-panel" aria-labelledby="cost-heading"><h2 id="cost-heading">PROCESSING COST</h2><div><span>Estimate<b id="cost-estimate">—</b></span><span>Actual<b id="cost-actual">—</b></span><span>Difference<b id="cost-difference">—</b></span></div><p id="cost-note">Loading usage data…</p></section>
     <section class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></section>
     </section>
   `);
@@ -275,6 +276,10 @@ async function renderBookPage() {
   const previousChapter = document.querySelector("#previous-chapter");
   const nextChapter = document.querySelector("#next-chapter");
   const nextAvailableChunk = document.querySelector("#next-available-chunk");
+  const costEstimate = document.querySelector("#cost-estimate");
+  const costActual = document.querySelector("#cost-actual");
+  const costDifference = document.querySelector("#cost-difference");
+  const costNote = document.querySelector("#cost-note");
   let chunks = [];
   let currentChunk = 0;
   let chapters = [];
@@ -282,6 +287,22 @@ async function renderBookPage() {
   let pendingSeekSeconds = null;
   let lastPersistedAt = 0;
   let audioRetryAttempts = 0;
+
+  const loadCost = async () => {
+    try {
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/cost`);
+      if (!response.ok) throw new Error("Unable to load processing cost");
+      const cost = await response.json();
+      const formatCost = (value) => `$${Number(value).toFixed(4)}`;
+      costEstimate.textContent = formatCost(cost.estimated_cost_usd);
+      costActual.textContent = formatCost(cost.actual_cost_usd);
+      const difference = Number(cost.difference_usd);
+      costDifference.textContent = `${difference >= 0 ? "+" : "−"}${formatCost(Math.abs(difference))}`;
+      costNote.textContent = `${cost.request_count} LLM request${cost.request_count === 1 ? "" : "s"} · ${cost.estimate_model_name || "Current model"} · price list ${cost.estimate_pricing_version}`;
+    } catch (error) {
+      costNote.textContent = "Cost data is not available yet.";
+    }
+  };
 
   const setControlsEnabled = (enabled) => {
     [playPause, previous, next, speed, ...skipButtons].forEach((control) => { control.disabled = !enabled; });
@@ -385,6 +406,7 @@ async function renderBookPage() {
     selectedChapter -= 1;
     window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
     drawChapterNavigation();
+    loadCost();
   });
   nextChapter.addEventListener("click", () => {
     selectedChapter += 1;
@@ -444,6 +466,8 @@ async function renderBookPage() {
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
     cover.querySelector("b").textContent = book.title.slice(0, 1).toUpperCase() || "A";
     drawChapterNavigation();
+    await loadCost();
+    window.setInterval(loadCost, 15_000);
     setControlsEnabled(chunks.length > 0);
     if (!chunks.length) {
       statusMessage.textContent = "Audio is still processing. Refresh this page when a segment is ready.";

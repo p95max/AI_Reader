@@ -35,6 +35,20 @@ class BookProcessingEstimateRead(BaseModel):
     estimated_total_tokens: int
     estimated_ai_cost_usd: float
     estimated_audio_seconds: int
+    model_name: str
+    pricing_version: str
+
+
+class BookCostRead(BaseModel):
+    estimated_cost_usd: float
+    actual_cost_usd: float
+    difference_usd: float
+    actual_input_tokens: int
+    actual_cached_input_tokens: int
+    actual_output_tokens: int
+    request_count: int
+    estimate_model_name: str
+    estimate_pricing_version: str
 
 
 class BookAudioChunkRead(BaseModel):

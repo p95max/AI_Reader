@@ -179,14 +179,15 @@ class OpenAIAdapter:
             text=text,
             model=request.model or self._settings.ai_model,
             usage=usage,
-            cost=self._calculate_cost(usage),
+            cost=self._calculate_cost(usage, request.model),
             provider_response_id=getattr(provider_response, "id", None),
         )
         persisted_request = request
         if persisted_request.pricing_version is None:
+            pricing = self._settings.pricing_for_model(response.model)
             persisted_request = replace(
                 persisted_request,
-                pricing_version=self._settings.ai_pricing_version,
+                pricing_version=pricing.version,
             )
         recorded = self._usage_reporter.record(persisted_request, response)
         if inspect.isawaitable(recorded):
@@ -238,18 +239,13 @@ class OpenAIAdapter:
             output_tokens=int(getattr(raw_usage, "output_tokens", 0) or 0),
         )
 
-    def _calculate_cost(self, usage: TokenUsage) -> UsageCost:
+    def _calculate_cost(self, usage: TokenUsage, model: str | None = None) -> UsageCost:
+        pricing = self._settings.pricing_for_model(model)
         uncached_input_tokens = max(usage.input_tokens - usage.cached_input_tokens, 0)
         return UsageCost(
-            input_cost=(
-                uncached_input_tokens * self._settings.ai_input_cost_per_million_tokens / 1_000_000
-            ),
+            input_cost=(uncached_input_tokens * pricing.input_per_million_tokens / 1_000_000),
             cached_input_cost=(
-                usage.cached_input_tokens
-                * self._settings.ai_cached_input_cost_per_million_tokens
-                / 1_000_000
+                usage.cached_input_tokens * pricing.cached_input_per_million_tokens / 1_000_000
             ),
-            output_cost=(
-                usage.output_tokens * self._settings.ai_output_cost_per_million_tokens / 1_000_000
-            ),
+            output_cost=(usage.output_tokens * pricing.output_per_million_tokens / 1_000_000),
         )

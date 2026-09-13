@@ -106,6 +106,31 @@ async def test_openai_adapter_generates_narration_and_records_usage() -> None:
 
 
 @pytest.mark.asyncio
+async def test_openai_adapter_uses_selected_model_price_list() -> None:
+    reporter = RecordingUsageReporter()
+    adapter = OpenAIAdapter(
+        make_settings(
+            ai_model="gpt-costed",
+            ai_model_price_list={
+                "gpt-costed": {
+                    "input_per_million_tokens": 10.0,
+                    "cached_input_per_million_tokens": 1.0,
+                    "output_per_million_tokens": 20.0,
+                    "version": "catalog-2026-09",
+                }
+            },
+        ),
+        client=FakeClient([provider_response()]),
+        usage_reporter=reporter,
+    )
+
+    response = await adapter.generate(AIRequest(instructions="Narrate", input_text="Source"))
+
+    assert response.cost.total_cost == pytest.approx(0.0182)
+    assert reporter.records[0][0].pricing_version == "catalog-2026-09"
+
+
+@pytest.mark.asyncio
 async def test_openai_adapter_retries_timeout_errors() -> None:
     client = FakeClient([TimeoutError("temporary failure"), provider_response("Recovered")])
     adapter = OpenAIAdapter(make_settings(), client=client, usage_reporter=RecordingUsageReporter())
