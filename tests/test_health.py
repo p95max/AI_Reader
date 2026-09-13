@@ -45,3 +45,11 @@ def test_processing_endpoints_are_exposed_in_openapi() -> None:
 
     assert "get" in schema["paths"]["/api/v1/books/estimate"]
     assert "post" in schema["paths"]["/api/v1/books/{book_id}/process"]
+
+
+def test_audio_player_endpoints_are_exposed_in_openapi() -> None:
+    schema = app.openapi()
+
+    assert "get" in schema["paths"]["/api/v1/books/{book_id}"]
+    assert "get" in schema["paths"]["/api/v1/books/{book_id}/audio"]
+    assert "get" in schema["paths"]["/api/v1/books/{book_id}/audio/{chunk_id}"]

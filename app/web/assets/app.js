@@ -227,12 +227,127 @@ function renderUpload() {
   });
 }
 
-function renderBookPage() {
+function formatPlaybackTime(seconds) {
+  const value = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(value / 3_600);
+  const minutes = Math.floor((value % 3_600) / 60);
+  const remainingSeconds = value % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
+    : `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1>YOUR BOOK</h1><p>Technical audiobook</p><span class="book-card__meta">◖ preparing · chapters and player will appear here</span></div></div>
-    <div class="player-tabs"><button class="is-active">Player</button><button>Chapters</button><button>Details</button></div><div class="player-track"><span></span></div><div class="player-controls"><button>↺15</button><button>◀</button><button class="play">Ⅱ</button><button>▶</button><button>15↻</button></div></section>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div></div>
+    <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></section>
+    </section>
   `);
+
+  const bookId = window.location.pathname.split("/").at(-1);
+  const title = document.querySelector("#player-title");
+  const author = document.querySelector("#player-author");
+  const cover = document.querySelector("#player-cover");
+  const statusMessage = document.querySelector("#player-status");
+  const chunkLabel = document.querySelector("#chunk-label");
+  const audio = document.querySelector("#book-audio");
+  const seek = document.querySelector("#player-seek");
+  const currentTime = document.querySelector("#current-time");
+  const totalTime = document.querySelector("#total-time");
+  const playPause = document.querySelector("#play-pause");
+  const previous = document.querySelector("#previous-chunk");
+  const next = document.querySelector("#next-chunk");
+  const speed = document.querySelector("#playback-speed");
+  const skipButtons = [...document.querySelectorAll("[data-skip]")];
+  let chunks = [];
+  let currentChunk = 0;
+
+  const setControlsEnabled = (enabled) => {
+    [playPause, previous, next, speed, ...skipButtons].forEach((control) => { control.disabled = !enabled; });
+    seek.disabled = !enabled;
+  };
+  const duration = () => Number.isFinite(audio.duration) ? audio.duration : (chunks[currentChunk]?.duration_milliseconds ?? 0) / 1_000;
+  const updateTimeline = () => {
+    const total = duration();
+    seek.max = String(total || 0);
+    seek.value = String(Math.min(audio.currentTime || 0, total || 0));
+    currentTime.textContent = formatPlaybackTime(audio.currentTime);
+    totalTime.textContent = formatPlaybackTime(total);
+  };
+  const updateButtons = () => {
+    const available = chunks.length > 0;
+    playPause.disabled = !available;
+    previous.disabled = !available || currentChunk === 0;
+    next.disabled = !available || currentChunk === chunks.length - 1;
+    skipButtons.forEach((button) => { button.disabled = !available; });
+  };
+  const setPlayButton = () => {
+    const playing = !audio.paused;
+    playPause.textContent = playing ? "Ⅱ" : "▶";
+    playPause.setAttribute("aria-label", playing ? "Pause" : "Play");
+  };
+  const selectChunk = async (index, shouldPlay = false) => {
+    if (index < 0 || index >= chunks.length) return;
+    currentChunk = index;
+    const chunk = chunks[currentChunk];
+    audio.src = chunk.stream_url;
+    audio.playbackRate = Number(speed.value);
+    audio.load();
+    chunkLabel.textContent = `Segment ${currentChunk + 1} of ${chunks.length}`;
+    statusMessage.textContent = "Ready to play";
+    updateTimeline();
+    updateButtons();
+    if (shouldPlay) {
+      try { await audio.play(); } catch (error) { statusMessage.textContent = "Press Play to start audio."; }
+    }
+  };
+
+  playPause.addEventListener("click", async () => {
+    if (audio.paused) {
+      try { await audio.play(); } catch (error) { statusMessage.textContent = "Unable to start audio. Please try again."; }
+    } else {
+      audio.pause();
+    }
+  });
+  previous.addEventListener("click", () => selectChunk(currentChunk - 1, !audio.paused));
+  next.addEventListener("click", () => selectChunk(currentChunk + 1, !audio.paused));
+  skipButtons.forEach((button) => button.addEventListener("click", () => {
+    audio.currentTime = Math.max(0, Math.min(duration(), audio.currentTime + Number(button.dataset.skip)));
+  }));
+  speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
+  seek.addEventListener("input", () => { audio.currentTime = Number(seek.value); updateTimeline(); });
+  audio.addEventListener("loadedmetadata", updateTimeline);
+  audio.addEventListener("timeupdate", updateTimeline);
+  audio.addEventListener("play", setPlayButton);
+  audio.addEventListener("pause", setPlayButton);
+  audio.addEventListener("ended", () => {
+    if (currentChunk < chunks.length - 1) selectChunk(currentChunk + 1, true);
+    else { statusMessage.textContent = "Book playback complete"; setPlayButton(); }
+  });
+  audio.addEventListener("error", () => { statusMessage.textContent = "This audio segment could not be loaded."; });
+
+  try {
+    const [bookResponse, audioResponse] = await Promise.all([
+      fetch(`/api/v1/books/${encodeURIComponent(bookId)}`),
+      fetch(`/api/v1/books/${encodeURIComponent(bookId)}/audio`),
+    ]);
+    if (!bookResponse.ok || !audioResponse.ok) throw new Error("Unable to load book player");
+    const book = await bookResponse.json();
+    chunks = await audioResponse.json();
+    title.textContent = book.title;
+    author.textContent = book.author;
+    cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
+    cover.querySelector("b").textContent = book.title.slice(0, 1).toUpperCase() || "A";
+    setControlsEnabled(chunks.length > 0);
+    if (!chunks.length) {
+      statusMessage.textContent = "Audio is still processing. Refresh this page when a segment is ready.";
+      return;
+    }
+    await selectChunk(0);
+  } catch (error) {
+    statusMessage.textContent = "Unable to load this book. Please return to your library and try again.";
+  }
 }
 
 if (window.location.pathname === "/library") {

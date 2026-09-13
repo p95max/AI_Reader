@@ -37,6 +37,14 @@ class BookProcessingEstimateRead(BaseModel):
     estimated_audio_seconds: int
 
 
+class BookAudioChunkRead(BaseModel):
+    id: UUID
+    chunk_index: int
+    duration_milliseconds: int
+    content_type: str
+    stream_url: str
+
+
 class ContentChunkProgressRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

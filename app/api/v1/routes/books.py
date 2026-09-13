@@ -2,16 +2,28 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.schemas.books import (
+    BookAudioChunkRead,
     BookLibraryItemRead,
     BookProcessingEstimateRead,
     BookProgressRead,
@@ -89,6 +101,97 @@ async def list_books(
         )
         for book in books
     ]
+
+
+@router.get("/{book_id}", response_model=BookRead)
+async def get_book(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Book:
+    book = await session.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    return book
+
+
+@router.get("/{book_id}/audio", response_model=list[BookAudioChunkRead])
+async def list_ready_audio_chunks(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[BookAudioChunkRead]:
+    if await session.get(Book, book_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    chunks = tuple(
+        (
+            await session.scalars(
+                select(AudioChunk)
+                .where(AudioChunk.book_id == book_id, AudioChunk.status == AudioChunkStatus.READY)
+                .order_by(AudioChunk.chunk_index)
+            )
+        ).all()
+    )
+    return [
+        BookAudioChunkRead(
+            id=chunk.id,
+            chunk_index=chunk.chunk_index,
+            duration_milliseconds=chunk.duration_milliseconds,
+            content_type=chunk.content_type,
+            stream_url=f"/api/v1/books/{book_id}/audio/{chunk.id}",
+        )
+        for chunk in chunks
+    ]
+
+
+@router.get("/{book_id}/audio/{chunk_id}")
+async def stream_audio_chunk(
+    book_id: UUID,
+    chunk_id: UUID,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+) -> Response:
+    chunk = await session.scalar(
+        select(AudioChunk).where(
+            AudioChunk.id == chunk_id,
+            AudioChunk.book_id == book_id,
+            AudioChunk.status == AudioChunkStatus.READY,
+        )
+    )
+    if chunk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio chunk not found")
+
+    try:
+        audio = await run_in_threadpool(storage.download_bytes, chunk.storage_key)
+    except ObjectStorageError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    range_header = request.headers.get("range")
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=300"}
+    if range_header and range_header.startswith("bytes="):
+        try:
+            start_text, end_text = range_header.removeprefix("bytes=").split("-", maxsplit=1)
+            if start_text:
+                start = int(start_text)
+                end = int(end_text) if end_text else len(audio) - 1
+            else:
+                suffix = int(end_text)
+                start = max(0, len(audio) - suffix)
+                end = len(audio) - 1
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE
+            ) from error
+        if start < 0 or end < start or start >= len(audio):
+            raise HTTPException(status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE)
+        end = min(end, len(audio) - 1)
+        headers["Content-Range"] = f"bytes {start}-{end}/{len(audio)}"
+        return Response(
+            content=audio[start : end + 1],
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+            media_type=chunk.content_type,
+            headers=headers,
+        )
+    return Response(content=audio, media_type=chunk.content_type, headers=headers)
 
 
 @router.get("/{book_id}/progress", response_model=BookProgressRead)

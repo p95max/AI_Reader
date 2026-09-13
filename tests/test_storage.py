@@ -33,6 +33,17 @@ class FakeS3Client:
     def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str) -> None:
         self.puts.append((Bucket, Key, Body, ContentType))
 
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+        return {"Body": FakeBody(b"audio")}
+
+
+class FakeBody:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+    def read(self) -> bytes:
+        return self.content
+
 
 def test_s3_storage_creates_bucket_uploads_and_deletes(tmp_path: Path) -> None:
     client = FakeS3Client()
@@ -62,3 +73,9 @@ def test_s3_storage_uploads_generated_audio_bytes() -> None:
     assert client.puts == [
         (storage.bucket_name, "books/book-id/audio/000000.wav", b"audio", "audio/wav")
     ]
+
+
+def test_s3_storage_downloads_audio_bytes() -> None:
+    storage = S3Storage(client=FakeS3Client())  # type: ignore[arg-type]
+
+    assert storage.download_bytes("books/book-id/audio/000000.wav") == b"audio"

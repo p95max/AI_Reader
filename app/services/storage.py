@@ -21,6 +21,8 @@ class ObjectStorage(Protocol):
 
     def download_file(self, key: str, destination: Path) -> None: ...
 
+    def download_bytes(self, key: str) -> bytes: ...
+
     def delete_file(self, key: str) -> None: ...
 
 
@@ -84,6 +86,14 @@ class S3Storage:
             self.client.download_file(self.bucket_name, key, str(destination))
         except (ClientError, BotoCoreError) as error:
             raise ObjectStorageError("Unable to download the stored PDF") from error
+
+    def download_bytes(self, key: str) -> bytes:
+        """Return one stored audio segment for the authenticated player route."""
+        try:
+            response = self.client.get_object(Bucket=self.bucket_name, Key=key)
+            return response["Body"].read()
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to retrieve generated audio") from error
 
 
 @lru_cache
