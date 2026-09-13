@@ -3,6 +3,11 @@
   display: none;
 }
 
+.sidebar .version {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
 .settings-page {
   max-width: 760px;
 }
