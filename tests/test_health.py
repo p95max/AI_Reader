@@ -34,6 +34,12 @@ def test_frontend_assets_are_served() -> None:
     assert "currentPage" in response.text
 
 
+def test_frontend_document_declares_english_interface_language() -> None:
+    response = client.get("/library")
+
+    assert '<html lang="en">' in response.text
+
+
 def test_books_list_api_is_exposed_in_openapi() -> None:
     schema = app.openapi()
 

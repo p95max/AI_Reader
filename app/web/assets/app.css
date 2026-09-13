@@ -1,14 +1,17 @@
 :root {
   color-scheme: dark;
-  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, monospace;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #020b17;
   color: #e5fbff;
 }
 
 body {
   background: radial-gradient(circle at 70% -20%, #0b3159 0, transparent 37%), #020b17;
-  margin: 0; min-height: 100vh;
+  margin: 0; min-height: 100vh; overflow-x: hidden;
 }
+
+.brand, .library-header h1, .feature-page h1, .chapter-navigation h2, .button, .filters button, .mode-buttons button, .player-tabs button { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, monospace; }
+:where(a, button, input, select):focus-visible { outline: 2px solid #7ee8ff; outline-offset: 3px; }
 
 .app-frame { border: 2px solid #174f87; border-radius: 22px; box-shadow: 0 0 0 3px #08223c, inset 0 0 60px #041b33; display: grid; grid-template-columns: 208px minmax(0, 1fr); margin: 18px auto; max-width: 1180px; min-height: 620px; overflow: hidden; position: relative;
 }
@@ -18,8 +21,9 @@ body {
 .brand span { color: #d6fbff; font-size: 24px; letter-spacing: -2px; text-shadow: 3px 3px #1b94f1; }
 .brand small { color: #48caff; font-size: 8px; letter-spacing: 0; line-height: 3; text-shadow: none; }
 .navigation { display: grid; gap: 7px; }
-.navigation a { align-items: center; border: 1px solid transparent; border-radius: 6px; color: #68c9ff; display: flex; font-size: 14px; gap: 14px; padding: 13px 10px; text-decoration: none; }
-.navigation a span { font-size: 25px; line-height: 14px; }
+.navigation a { align-items: center; border: 1px solid transparent; border-radius: 6px; color: #68c9ff; display: flex; font-size: 14px; gap: 11px; min-height: 44px; padding: 9px 10px; text-decoration: none; transition: background .15s, border-color .15s, color .15s; }
+.nav-icon { border: 1px solid currentColor; border-radius: 3px; fill: none; height: 20px; padding: 3px; stroke: currentColor; stroke-linecap: square; stroke-linejoin: miter; stroke-width: 1.8; width: 20px; }
+.navigation a:hover { background: #082844; border-color: #3fcaff; color: #bdf5ff; }
 .navigation a[aria-current="page"] { background: linear-gradient(100deg, #33cbff, #568fff); box-shadow: 0 0 15px #1065a7; color: #020c18; font-weight: 900; }
 .sidebar-links { border-top: 1px solid #1b527d; display: grid; gap: 15px; margin: 25px 0 20px; padding-top: 20px; }
 .sidebar-links a { color: #67b9ed; font-size: 12px; text-decoration: none; }
@@ -38,7 +42,7 @@ body {
 .search input { background: transparent; border: 0; color: #b7eaff; font: inherit; outline: 0; padding: 11px 0; width: 170px; }
 .search input::placeholder { color: #58a4d7; }
 
-.button { background: linear-gradient(135deg, #32dfff, #4398fb 52%, #c751ff); border: 0; border-bottom: 3px solid #e067f8; border-radius: 5px; color: #03101d; cursor: pointer; font: 900 15px inherit; letter-spacing: .4px; padding: 13px 18px; text-decoration: none; white-space: nowrap; }
+.button { background: linear-gradient(135deg, #32dfff, #4398fb 52%, #c751ff); border: 0; border-bottom: 3px solid #e067f8; border-radius: 5px; box-shadow: 0 0 18px #168cc055; color: #03101d; cursor: pointer; font: 900 15px inherit; letter-spacing: .4px; padding: 13px 18px; text-decoration: none; transition: filter .15s, transform .15s, box-shadow .15s; white-space: nowrap; }.button:hover { box-shadow: 0 0 24px #58cfff99; filter: brightness(1.08); transform: translateY(-1px); }
 .filters { display: flex; gap: 0; margin-bottom: 18px; }
 .filters button, .mode-buttons button, .player-tabs button { background: #031323; border: 1px solid #164b7e; color: #5dbdff; cursor: pointer; font: 12px inherit; padding: 12px 22px; text-transform: uppercase; }
 .filters button:first-child { border-radius: 5px 0 0 5px; }.filters button:last-child { border-radius: 0 5px 5px 0; }
@@ -55,6 +59,10 @@ body {
 .chapter-navigation { background: #031426; border: 1px solid #1a588d; border-radius: 7px; margin-top: 18px; padding: 17px; }.chapter-navigation__title { align-items: flex-start; display: flex; justify-content: space-between; gap: 12px; }.chapter-navigation h2 { color: #b9f4ff; font-size: 18px; letter-spacing: -1px; margin: 0; }.chapter-navigation__title p, .next-available-chunk { color: #66bdf4; font-size: 10px; line-height: 1.5; margin: 6px 0 0; }.chapter-navigation__controls { display: flex; gap: 5px; }.chapter-navigation__controls button { background: #06213b; border: 1px solid #24669a; color: #6fd4ff; cursor: pointer; font: 16px inherit; padding: 4px 9px; }.chapter-navigation__controls button:disabled { color: #345873; cursor: not-allowed; }.chapter-list { display: grid; gap: 7px; list-style: none; margin: 17px 0; padding: 0; }.chapter-item { align-items: center; background: #041a30; border: 1px solid #164b7e; color: #bcf0ff; cursor: pointer; display: flex; justify-content: space-between; text-align: left; width: 100%; padding: 10px; }.chapter-item:hover, .chapter-item.is-selected { border-color: #47d7ff; box-shadow: inset 3px 0 #bd5cff; }.chapter-item span { display: grid; gap: 3px; min-width: 0; }.chapter-item b { color: #5acbff; font-size: 9px; }.chapter-item strong { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.chapter-item small { font-size: 9px; text-align: right; }.chapter-list__empty { border: 1px dashed #245b86; color: #64b8e7; font-size: 11px; padding: 15px; text-align: center; }.next-available-chunk { border-top: 1px solid #154b78; padding-top: 12px; }
 .mobile-navigation { display: none; }
 
-@media (max-width: 850px) { .app-frame { border: 0; border-radius: 0; display: block; margin: 0; min-height: 100vh; }.sidebar { display: none; }.app-shell { padding: 0 18px 94px; }.topbar { margin: 0 -18px 25px; }.library-header { align-items: flex-start; gap: 18px; }.library-actions { flex: 1; justify-content: flex-end; }.library-actions .button { font-size: 0; padding: 12px; }.library-actions .button::after { content: "＋"; font-size: 24px; }.search input { width: 125px; }.book-list { grid-template-columns: 1fr; }.book-card { min-height: 118px; }.book-cover { flex-basis: 72px; height: 98px; }.mobile-navigation { background: #031221f3; border-top: 1px solid #195080; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); left: 0; padding: 7px 16px max(10px, env(safe-area-inset-bottom)); position: fixed; right: 0; z-index: 5; }.mobile-navigation .navigation { display: contents; }.mobile-navigation a { flex-direction: column; font-size: 10px; gap: 5px; padding: 7px; text-align: center; }.mobile-navigation a[aria-current="page"] { background: transparent; color: #3bddff; box-shadow: none; }.mobile-navigation a span { font-size: 22px; }.filters button { flex: 1; padding: 11px 5px; }.filters button:last-child { display: none; }.feature-page { max-width: 440px; }.estimate { font-size: 9px; } }
+@keyframes soft-glow { 50% { box-shadow: 0 0 21px #3acdfb99; } }
+.navigation a[aria-current="page"], .button:not(:disabled) { animation: soft-glow 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
+@media (max-width: 850px) { .app-frame { border: 0; border-radius: 0; display: block; margin: 0; min-height: 100vh; }.sidebar { display: none; }.app-shell { padding: 0 18px 94px; }.topbar { margin: 0 -18px 25px; }.library-header { align-items: flex-start; gap: 18px; }.library-actions { flex: 1; justify-content: flex-end; }.library-actions .button { font-size: 0; min-height: 44px; padding: 9px 12px; }.library-actions .button::after { content: "＋"; font-size: 24px; }.search input { width: 125px; }.book-list { grid-template-columns: 1fr; }.book-card { min-height: 118px; }.book-cover { flex-basis: 72px; height: 98px; }.mobile-navigation { background: #031221f3; border-top: 1px solid #195080; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); left: 0; padding: 7px 16px max(10px, env(safe-area-inset-bottom)); position: fixed; right: 0; z-index: 5; }.mobile-navigation .navigation { display: contents; }.mobile-navigation a { align-items: center; display: flex !important; flex-direction: column !important; font-size: 10px; gap: 5px; justify-content: center; line-height: 1; min-height: 48px; padding: 5px; text-align: center; text-decoration: none; }.mobile-navigation a[aria-current="page"] { background: transparent; color: #3bddff; box-shadow: none; }.mobile-navigation .nav-icon { flex: 0 0 auto; height: 18px; padding: 2px; width: 18px; }.filters button { flex: 1; min-height: 44px; padding: 11px 5px; }.filters button:last-child { display: none; }.feature-page { max-width: 440px; }.estimate { font-size: 9px; }.drop-zone { min-height: 170px; }.player-controls button { min-height: 48px; min-width: 48px; }.chapter-item { min-height: 50px; }.chapter-navigation__controls button { min-height: 40px; min-width: 40px; } }
 
 @media (max-width: 480px) { .library-header h1, .feature-page h1 { font-size: 35px; }.library-header p { font-size: 11px; }.library-actions { gap: 6px; }.search { padding: 0 6px; }.search span { font-size: 20px; }.search input { width: 98px; }.book-card__body strong { font-size: 14px; } }

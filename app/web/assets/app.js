@@ -31,16 +31,25 @@ function currentPage(pathname) {
 
 function navigation() {
   return [
-    ["/library", "▣", "Library"],
-    ["/upload", "⇧", "Add Book"],
-    ["/settings", "⚙", "Settings"],
+    ["/library", "library", "Library"],
+    ["/upload", "upload", "Add Book"],
+    ["/settings", "settings", "Settings"],
   ]
     .map((path) => {
-      const [href, icon, label] = path;
+      const [href, iconName, label] = path;
       const active = href === window.location.pathname ? ' aria-current="page"' : "";
-      return `<a href="${href}"${active}><span aria-hidden="true">${icon}</span>${label}</a>`;
+      return `<a href="${href}"${active}>${navigationIcon(iconName)}${label}</a>`;
     })
     .join("");
+}
+
+function navigationIcon(name) {
+  const paths = {
+    library: '<path d="M4 5h16v15H4zM8 5v15M11 9h5M11 13h5"/>',
+    upload: '<path d="M12 15V3m0 0L7 8m5-5 5 5M5 16v4h14v-4"/>',
+    settings: '<path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm0-12.2v2m0 14v2m9-9h-2M5 12H3m15.4-6.4-1.4 1.4M7 17l-1.4 1.4m12.8 0L17 17M7 7 5.6 5.6"/>',
+  };
+  return `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name]}</svg>`;
 }
 
 function shell(content) {
@@ -272,6 +281,7 @@ async function renderBookPage() {
   let selectedChapter = Math.max(0, Number(new URLSearchParams(window.location.search).get("chapter")) || 0);
   let pendingSeekSeconds = null;
   let lastPersistedAt = 0;
+  let audioRetryAttempts = 0;
 
   const setControlsEnabled = (enabled) => {
     [playPause, previous, next, speed, ...skipButtons].forEach((control) => { control.disabled = !enabled; });
@@ -348,6 +358,7 @@ async function renderBookPage() {
     if (audio.src && index !== currentChunk) await persistPlayback({ force: true });
     currentChunk = index;
     const chunk = chunks[currentChunk];
+    audioRetryAttempts = 0;
     pendingSeekSeconds = Math.max(0, startAtMilliseconds / 1_000);
     audio.src = chunk.stream_url;
     audio.playbackRate = Number(speed.value);
@@ -401,7 +412,15 @@ async function renderBookPage() {
     if (currentChunk < chunks.length - 1) selectChunk(currentChunk + 1, true);
     else { statusMessage.textContent = "Book playback complete"; setPlayButton(); }
   });
-  audio.addEventListener("error", () => { statusMessage.textContent = "This audio segment could not be loaded."; });
+  audio.addEventListener("error", () => {
+    if (audioRetryAttempts < 2 && chunks[currentChunk]) {
+      audioRetryAttempts += 1;
+      statusMessage.textContent = `Connection interrupted. Retrying segment (${audioRetryAttempts}/2)…`;
+      window.setTimeout(() => audio.load(), 800 * audioRetryAttempts);
+      return;
+    }
+    statusMessage.textContent = "This audio segment could not be loaded. Check your connection and try again.";
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") persistPlayback({ force: true, keepalive: true });
   });
