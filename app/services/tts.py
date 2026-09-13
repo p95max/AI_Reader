@@ -27,11 +27,18 @@ class SpeechSpeed(StrEnum):
     SLOW = "slow"
 
 
+class ReadingStyle(StrEnum):
+    NEUTRAL = "neutral"
+    CALM = "calm"
+    EXPRESSIVE = "expressive"
+
+
 @dataclass(frozen=True, slots=True)
 class SpeechRequest:
     text: str
     voice: str | None = None
     speed: SpeechSpeed = SpeechSpeed.NORMAL
+    style: ReadingStyle = ReadingStyle.NEUTRAL
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -68,12 +75,21 @@ class QwenModel(Protocol):
     ) -> tuple[list[Any], int]: ...
 
 
-def speech_instruction(settings: Settings, speed: SpeechSpeed) -> str:
+def speech_instruction(
+    settings: Settings,
+    speed: SpeechSpeed,
+    style: ReadingStyle = ReadingStyle.NEUTRAL,
+) -> str:
     pace = {
         SpeechSpeed.NORMAL: "Используй обычный, естественный темп речи.",
         SpeechSpeed.SLOW: "Говори медленнее обычного, чётко выделяя смысловые паузы.",
     }[speed]
-    return f"{settings.tts_instruction.strip()} {pace}"
+    delivery = {
+        ReadingStyle.NEUTRAL: "Сохраняй нейтральную, информативную подачу.",
+        ReadingStyle.CALM: "Используй спокойную, мягкую подачу без излишней экспрессии.",
+        ReadingStyle.EXPRESSIVE: "Подчёркивай важные мысли естественной выразительной интонацией.",
+    }[style]
+    return f"{settings.tts_instruction.strip()} {pace} {delivery}"
 
 
 class QwenTTSSynthesizer:
@@ -97,7 +113,7 @@ class QwenTTSSynthesizer:
             request.text,
             speaker=request.voice or self._settings.tts_voice,
             language=self._settings.tts_language,
-            instruct=speech_instruction(self._settings, request.speed),
+            instruct=speech_instruction(self._settings, request.speed, request.style),
             non_streaming_mode=True,
         )
         if not waveforms:

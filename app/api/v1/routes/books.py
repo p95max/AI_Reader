@@ -30,6 +30,7 @@ from app.schemas.books import (
     BookProcessingEstimateRead,
     BookProgressRead,
     BookRead,
+    BookTTSSettingsUpdate,
     PlaybackPositionRead,
     PlaybackPositionUpdate,
 )
@@ -329,6 +330,9 @@ async def create_book(
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
         estimate_model_name=settings.ai_model,
         estimate_pricing_version=pricing.version,
+        tts_voice=settings.tts_voice,
+        tts_speed="normal",
+        tts_style="neutral",
         status=BookStatus.UPLOADED,
     )
     session.add(book)
@@ -356,6 +360,7 @@ async def create_book(
 async def start_book_processing(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    payload: BookTTSSettingsUpdate | None = None,
 ) -> Book:
     """Queue PDF structure extraction after the client confirms processing settings."""
     book = await session.get(Book, book_id)
@@ -365,6 +370,11 @@ async def start_book_processing(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Book is already ready")
     if book.status == BookStatus.PROCESSING:
         return book
+
+    if payload is not None:
+        book.tts_voice = payload.voice
+        book.tts_speed = payload.speed.value
+        book.tts_style = payload.style.value
 
     book.status = BookStatus.PROCESSING
     await session.commit()

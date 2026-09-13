@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.book import BookStatus
 from app.models.chapter import ProcessingStatus
+from app.services.tts import ReadingStyle, SpeechSpeed
 
 
 class BookRead(BaseModel):
@@ -17,6 +18,9 @@ class BookRead(BaseModel):
     content_type: str
     size_bytes: int
     status: BookStatus
+    tts_voice: str
+    tts_speed: SpeechSpeed
+    tts_style: ReadingStyle
     created_at: datetime
     updated_at: datetime
 
@@ -53,6 +57,12 @@ class BookCostRead(BaseModel):
     generated_audio_seconds: int
     tts_generation_seconds: int
     total_processing_cost_usd: float
+
+
+class BookTTSSettingsUpdate(BaseModel):
+    voice: str = Field(default="Ryan", min_length=1, max_length=100)
+    speed: SpeechSpeed = SpeechSpeed.NORMAL
+    style: ReadingStyle = ReadingStyle.NEUTRAL
 
 
 class BookAudioChunkRead(BaseModel):

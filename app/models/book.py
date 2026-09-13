@@ -38,6 +38,9 @@ class Book(Base):
     estimated_ai_cost_usd: Mapped[float] = mapped_column(Numeric(16, 8), default=0)
     estimate_model_name: Mapped[str] = mapped_column(String(255), default="")
     estimate_pricing_version: Mapped[str] = mapped_column(String(100), default="default")
+    tts_voice: Mapped[str] = mapped_column(String(100), default="Ryan")
+    tts_speed: Mapped[str] = mapped_column(String(20), default="normal")
+    tts_style: Mapped[str] = mapped_column(String(20), default="neutral")
     status: Mapped[BookStatus] = mapped_column(
         Enum(
             BookStatus,

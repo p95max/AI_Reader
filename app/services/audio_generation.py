@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from app.services.storage import ObjectStorage
-from app.services.tts import SpeechRequest, SpeechSpeed, SpeechSynthesizer
+from app.services.tts import ReadingStyle, SpeechRequest, SpeechSpeed, SpeechSynthesizer
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
 
@@ -95,6 +95,7 @@ class AudioChunkGenerator:
         *,
         voice: str | None = None,
         speed: SpeechSpeed = SpeechSpeed.NORMAL,
+        style: ReadingStyle = ReadingStyle.NEUTRAL,
     ) -> list[GeneratedAudioChunk]:
         generated: list[GeneratedAudioChunk] = []
         for chunk_index, text in enumerate(self._chunker.split(narration)):
@@ -105,6 +106,7 @@ class AudioChunkGenerator:
                     text,
                     voice=voice,
                     speed=speed,
+                    style=style,
                 )
             )
         return generated
@@ -120,9 +122,10 @@ class AudioChunkGenerator:
         *,
         voice: str | None = None,
         speed: SpeechSpeed = SpeechSpeed.NORMAL,
+        style: ReadingStyle = ReadingStyle.NEUTRAL,
     ) -> GeneratedAudioChunk:
         audio = self._synthesizer.synthesize(
-            SpeechRequest(text=narration, voice=voice, speed=speed)
+            SpeechRequest(text=narration, voice=voice, speed=speed, style=style)
         )
         storage_key = audio_storage_key(book_id, chunk_index)
         self._storage.upload_bytes(audio.content, storage_key, audio.mime_type)

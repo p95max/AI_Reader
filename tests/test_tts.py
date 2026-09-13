@@ -2,7 +2,13 @@ import pytest
 
 from app.core.config import get_settings
 from app.services.resilient_tts import AudioChunkProcessingError
-from app.services.tts import QwenTTSSynthesizer, SpeechRequest, SpeechSpeed, speech_instruction
+from app.services.tts import (
+    QwenTTSSynthesizer,
+    ReadingStyle,
+    SpeechRequest,
+    SpeechSpeed,
+    speech_instruction,
+)
 from app.workers.celery_app import celery_app
 from app.workers.tasks import generate_audio_chunks
 
@@ -42,6 +48,15 @@ def test_slow_mode_changes_the_speech_instruction() -> None:
     settings = get_settings()
     assert "медленнее" in speech_instruction(settings, SpeechSpeed.SLOW)
     assert "обычный" in speech_instruction(settings, SpeechSpeed.NORMAL)
+
+
+def test_reading_style_changes_the_speech_instruction() -> None:
+    settings = get_settings()
+
+    assert "спокойную" in speech_instruction(settings, SpeechSpeed.NORMAL, ReadingStyle.CALM)
+    assert "выразительной" in speech_instruction(
+        settings, SpeechSpeed.NORMAL, ReadingStyle.EXPRESSIVE
+    )
 
 
 def test_tts_tasks_are_routed_to_a_dedicated_queue() -> None:

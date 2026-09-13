@@ -13,7 +13,7 @@ from app.services.audio_generation import (
     audio_storage_key,
 )
 from app.services.storage import ObjectStorageError
-from app.services.tts import SpeechSpeed, TTSError
+from app.services.tts import ReadingStyle, SpeechSpeed, TTSError
 from app.services.tts_usage import TTSUsageCostCalculator
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ class ResilientTTSProcessor:
         voice: str,
         speed: SpeechSpeed,
         attempt_count: int,
+        style: ReadingStyle = ReadingStyle.NEUTRAL,
     ) -> list[GeneratedAudioChunk]:
         await self._store.ensure_voice(book_id, voice)
         generated: list[GeneratedAudioChunk] = []
@@ -63,6 +64,7 @@ class ResilientTTSProcessor:
                     text,
                     voice=voice,
                     speed=speed,
+                    style=style,
                 )
             except (ObjectStorageError, TTSError, ValueError) as error:
                 await self._store.mark_failed(

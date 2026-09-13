@@ -15,7 +15,7 @@ from app.services.progressive_processing_coordinator import ProgressiveProcessin
 from app.services.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
 from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
 from app.services.storage import get_object_storage
-from app.services.tts import SpeechRequest, SpeechSpeed, get_tts_synthesizer
+from app.services.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_synthesizer
 from app.services.tts_usage import TTSUsageCostCalculator
 from app.workers.celery_app import celery_app
 
@@ -70,15 +70,29 @@ async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
     return {"book_id": str(book_id), **plan.as_task_payload()}
 
 
+async def _book_tts_preferences(book_id: UUID) -> tuple[str | None, str | None, str | None]:
+    async with SessionLocal() as session:
+        book = await session.get(Book, book_id)
+    if book is None:
+        return None, None, None
+    return book.tts_voice, book.tts_speed, book.tts_style
+
+
 @celery_app.task(name="ai_reader.tts.synthesize")
 def synthesize_tts(
     text: str,
     *,
     voice: str | None = None,
     speed: str = SpeechSpeed.NORMAL.value,
+    style: str = ReadingStyle.NEUTRAL.value,
 ) -> dict[str, str | int]:
     """Generate one TTS result in the dedicated ``tts`` queue."""
-    request = SpeechRequest(text=text, voice=voice, speed=SpeechSpeed(speed))
+    request = SpeechRequest(
+        text=text,
+        voice=voice,
+        speed=SpeechSpeed(speed),
+        style=ReadingStyle(style),
+    )
     return get_tts_synthesizer().synthesize(request).as_task_payload()
 
 
@@ -96,11 +110,13 @@ def generate_audio_chunks(
     narration: str,
     *,
     voice: str | None = None,
-    speed: str = SpeechSpeed.NORMAL.value,
+    speed: str | None = None,
+    style: str | None = None,
 ) -> dict[str, object]:
     """Generate TTS chunks with per-chunk checkpoints and retry support."""
     parsed_book_id = UUID(book_id)
     settings = get_settings()
+    book_voice, book_speed, book_style = asyncio.run(_book_tts_preferences(parsed_book_id))
     generator = AudioChunkGenerator(
         get_tts_synthesizer(),
         get_object_storage(),
@@ -115,8 +131,9 @@ def generate_audio_chunks(
         processor.process(
             parsed_book_id,
             narration,
-            voice=voice or settings.tts_voice,
-            speed=SpeechSpeed(speed),
+            voice=voice or book_voice or settings.tts_voice,
+            speed=SpeechSpeed(speed or book_speed or SpeechSpeed.NORMAL.value),
+            style=ReadingStyle(style or book_style or ReadingStyle.NEUTRAL.value),
             attempt_count=self.request.retries + 1,
         )
     )
