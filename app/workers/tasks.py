@@ -127,6 +127,9 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
             TextBlock(
                 page_number=content_chunk.page_number,
                 text=content_chunk.source_text,
+                bbox=(0.0, 0.0, 0.0, 0.0),
+                font_size=0.0,
+                is_heading=False,
                 is_code=True,
             ),
             NarrationSettings(code_mode=CodeMode(book.code_mode)),
