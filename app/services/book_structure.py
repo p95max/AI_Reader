@@ -47,10 +47,13 @@ class BookStructureBuilder:
             for block in page.text_blocks:
                 # PDF extractors commonly emit footer page numbers as independent
                 # text blocks. They are not narratable content.
-                if self._is_page_number(block.text):
+                if self._is_page_number(block.text) or not self._is_usable_text(block.text):
                     continue
                 if block.is_heading:
-                    if current is not None:
+                    # Consecutive headings are typical of a cover page (title,
+                    # subtitle, author). Keep only the last candidate until real
+                    # content arrives, rather than producing empty chapters.
+                    if current is not None and current.blocks:
                         pending.append(current)
                     current = _PendingChapter(
                         title=self._title(block.text),
@@ -70,7 +73,7 @@ class BookStructureBuilder:
             if current is not None:
                 current.end_page = page.number
 
-        if current is not None:
+        if current is not None and current.blocks:
             pending.append(current)
 
         return tuple(
@@ -99,3 +102,13 @@ class BookStructureBuilder:
     @classmethod
     def _is_page_number(cls, text: str) -> bool:
         return bool(cls._PAGE_NUMBER.fullmatch(text))
+
+    @staticmethod
+    def _is_usable_text(text: str) -> bool:
+        non_whitespace = [character for character in text if not character.isspace()]
+        if not non_whitespace:
+            return False
+        control_count = sum(
+            ord(character) < 32 and not character.isspace() for character in non_whitespace
+        )
+        return control_count / len(non_whitespace) < 0.05

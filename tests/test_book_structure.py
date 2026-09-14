@@ -104,6 +104,28 @@ def test_builder_ignores_standalone_page_numbers() -> None:
     ]
 
 
+def test_builder_drops_empty_cover_headings_and_malformed_text() -> None:
+    document = ParsedDocument(
+        page_count=1,
+        pages=(
+            page(
+                1,
+                block(1, "THE", heading=True),
+                block(1, "TELL-TALE", heading=True),
+                block(1, "HEART", heading=True),
+                block(1, "\x03broken\x03", heading=True),
+                block(1, "The first readable paragraph."),
+            ),
+        ),
+    )
+
+    chapters = BookStructureBuilder().build(document)
+
+    assert len(chapters) == 1
+    assert chapters[0].title == "HEART"
+    assert [chunk.source_text for chunk in chapters[0].chunks] == ["The first readable paragraph."]
+
+
 class MemoryStore:
     def __init__(self) -> None:
         self.saved: tuple[UUID, object] | None = None

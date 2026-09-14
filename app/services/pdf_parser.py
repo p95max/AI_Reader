@@ -157,14 +157,11 @@ class PDFParser:
                 default=base_font_size,
             )
             is_heading = base_font_size > 0 and font_size >= base_font_size * self.heading_scale
-            uses_monospace_font = any(
-                font in span["font"].lower()
-                for span in spans
-                for font in ("mono", "courier", "consolas", "menlo")
-            )
-            is_code = not is_heading and (
-                uses_monospace_font or bool(self.code_pattern.search(text))
-            )
+            # A monospaced font is common in scanned/test PDFs and is not enough
+            # evidence on its own. Require recognizable programming syntax before
+            # routing a block to the code-narration path.
+            has_code_syntax = bool(self.code_pattern.search(text))
+            is_code = not is_heading and has_code_syntax
             blocks.append(
                 TextBlock(
                     page_number=page_number,
