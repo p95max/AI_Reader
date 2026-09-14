@@ -596,9 +596,11 @@ async function renderBookPage() {
     window.setInterval(loadUsage, 15_000);
     setControlsEnabled(chunks.length > 0);
     if (!chunks.length) {
-      statusMessage.textContent = "Audio is still processing. Refresh this page when a segment is ready.";
+      statusMessage.classList.add("player-processing-status");
+      statusMessage.innerHTML = '<span>Preparing your first audio segment</span><span class="processing-line" aria-hidden="true"><i></i></span><span class="processing-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>';
       return;
     }
+    statusMessage.classList.remove("player-processing-status");
     const resumeChunk = chunks.findIndex((chunk) => chunk.id === playback.audio_chunk_id);
     const resumeIndex = resumeChunk >= 0 ? resumeChunk : 0;
     const resumeAtMilliseconds = resumeChunk >= 0 ? playback.position_milliseconds : 0;
