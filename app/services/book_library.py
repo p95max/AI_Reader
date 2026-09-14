@@ -13,6 +13,7 @@ class BookLibraryItem:
     id: UUID
     title: str
     author: str
+    publication_year: int | None
     status: BookStatus
     progress_percent: float
 
@@ -29,6 +30,7 @@ def build_book_library_item(book: Book, *, total_chunks: int, ready_chunks: int)
         id=book.id,
         title=book.title,
         author=book.author,
+        publication_year=book.publication_year,
         status=book.status,
         progress_percent=progress_percent,
     )

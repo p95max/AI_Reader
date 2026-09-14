@@ -15,6 +15,7 @@ class BookRead(BaseModel):
     id: UUID
     title: str
     author: str
+    publication_year: int | None
     original_filename: str
     content_type: str
     size_bytes: int
@@ -34,6 +35,7 @@ class BookLibraryItemRead(BaseModel):
     id: UUID
     title: str
     author: str
+    publication_year: int | None
     status: BookStatus
     progress_percent: float
 
@@ -62,6 +64,34 @@ class BookCostRead(BaseModel):
     generated_audio_seconds: int
     tts_generation_seconds: int
     total_processing_cost_usd: float
+
+
+class BookUsageSummaryItemRead(BaseModel):
+    id: UUID
+    title: str
+    status: BookStatus
+    created_at: datetime
+    input_tokens: int
+    cached_input_tokens: int
+    output_tokens: int
+    request_count: int
+    ai_cost_usd: float
+    tts_cost_usd: float
+    total_cost_usd: float
+    generated_audio_seconds: int
+
+
+class BookUsageSummaryRead(BaseModel):
+    total_books: int
+    input_tokens: int
+    cached_input_tokens: int
+    output_tokens: int
+    request_count: int
+    ai_cost_usd: float
+    tts_cost_usd: float
+    total_cost_usd: float
+    generated_audio_seconds: int
+    books: list[BookUsageSummaryItemRead]
 
 
 class NarrationPreferences(BaseModel):

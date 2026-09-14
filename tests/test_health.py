@@ -39,6 +39,14 @@ def test_frontend_assets_are_served() -> None:
     assert '["/player", "player", "Player"]' not in response.text
 
 
+def test_settings_voice_picker_uses_voice_cards() -> None:
+    response = client.get("/assets/settings-ui.js")
+
+    assert response.status_code == 200
+    assert "settings-voice-grid" in response.text
+    assert "voiceProfiles" in response.text
+
+
 def test_frontend_document_declares_english_interface_language() -> None:
     response = client.get("/library")
 
@@ -50,6 +58,7 @@ def test_books_list_api_is_exposed_in_openapi() -> None:
 
     assert "get" in schema["paths"]["/api/v1/books"]
     assert "delete" in schema["paths"]["/api/v1/books/{book_id}"]
+    assert "get" in schema["paths"]["/api/v1/books/usage-summary"]
 
 
 def test_processing_endpoints_are_exposed_in_openapi() -> None:

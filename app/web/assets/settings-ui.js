@@ -27,11 +27,27 @@ function enhanceSettingsPage() {
   const selects = [...form.querySelectorAll("label.voice-setting > select")];
   if (!selects.length) return;
 
+  const voiceProfiles = {
+    alloy: "Balanced · clear",
+    ash: "Deep · measured",
+    ballad: "Warm · expressive",
+    cedar: "Grounded · steady",
+    coral: "Bright · friendly",
+    echo: "Smooth · neutral",
+    fable: "Story-led · warm",
+    marin: "Natural · polished",
+    nova: "Energetic · clear",
+    onyx: "Low · confident",
+    sage: "Calm · precise",
+    shimmer: "Light · engaging",
+    verse: "Dynamic · vivid",
+  };
+
   const syncButtons = (select, group) => {
     group.querySelectorAll("button[data-value]").forEach((button) => {
       const active = button.dataset.value === select.value;
       button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
+      button.setAttribute(select.name === "voice" ? "aria-checked" : "aria-pressed", String(active));
     });
   };
 
@@ -46,15 +62,22 @@ function enhanceSettingsPage() {
       .join(" ");
 
     const control = document.createElement("div");
-    control.className = "settings-control";
+    const isVoiceControl = select.name === "voice";
+    control.className = `settings-control${isVoiceControl ? " settings-control--voice" : ""}`;
 
     const label = document.createElement("span");
     label.className = "settings-control__label";
     label.textContent = labelText;
+    if (isVoiceControl) {
+      const hint = document.createElement("small");
+      hint.className = "settings-control__hint";
+      hint.textContent = "Choose the narration voice for books you process next.";
+      label.append(hint);
+    }
 
     const group = document.createElement("div");
-    group.className = "settings-segmented";
-    group.setAttribute("role", "group");
+    group.className = `settings-segmented${isVoiceControl ? " settings-voice-grid" : ""}`;
+    group.setAttribute("role", isVoiceControl ? "radiogroup" : "group");
     group.setAttribute("aria-label", labelText);
     group.style.setProperty("--settings-options", String(select.options.length));
 
@@ -62,7 +85,17 @@ function enhanceSettingsPage() {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.value = option.value;
-      button.textContent = option.textContent;
+      if (isVoiceControl) {
+        button.className = "settings-voice-card";
+        button.setAttribute("role", "radio");
+        const name = document.createElement("strong");
+        name.textContent = option.textContent;
+        const profile = document.createElement("span");
+        profile.textContent = voiceProfiles[option.value] ?? "OpenAI voice";
+        button.append(name, profile);
+      } else {
+        button.textContent = option.textContent;
+      }
       button.addEventListener("click", () => {
         select.value = option.value;
         select.dispatchEvent(new Event("change", { bubbles: true }));

@@ -229,6 +229,7 @@ function coverVariant(title) {
 function renderBookCard(book) {
   const title = escapeHtml(book.title);
   const author = escapeHtml(book.author);
+  const publicationYear = Number.isInteger(book.publication_year) ? ` · ${book.publication_year}` : "";
   const initial = title.slice(0, 1).toUpperCase() || "A";
   const progress = Math.max(0, Math.min(100, Number(book.progress_percent) || 0));
   return `
@@ -237,7 +238,7 @@ function renderBookCard(book) {
       <span class="book-cover book-cover--${coverVariant(book.title)}" aria-hidden="true"><b>${initial}</b><i></i></span>
       <span class="book-card__body">
         <span class="book-card__status status--${escapeHtml(book.status)}">${statusLabel(book.status)}</span>
-        <strong>${title}</strong><span class="book-card__author">${author}</span>
+        <strong>${title}</strong><span class="book-card__author">${author}${publicationYear}</span>
         <span class="progress" aria-label="${progress}% complete"><span style="width: ${progress}%"></span></span>
         <span class="book-card__meta">◖ ${progress}% complete <b>•••</b></span>
       </span>
@@ -459,19 +460,49 @@ async function renderSettings() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Settings)</span><span>◉ USER⌄</span></header>
     <form id="preferences-form" class="feature-page settings-page"><a class="back-link" href="/library">← Library</a><h1>SETTINGS</h1><p>Choose defaults for books you process next.</p>
-      <label class="voice-setting">Voice<select name="voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><p class="settings-warning">Changing the voice affects new books only. Existing books require audio reprocessing.</p>
-      <label class="voice-setting">Speech speed<select name="speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label>
-      <label class="voice-setting">Reading style<select name="style"><option value="calm">Calm</option><option value="neutral">Neutral</option><option value="expressive">Expressive</option></select></label>
-      <label class="voice-setting">Code mode<select name="code_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option><option value="hybrid">Hybrid</option></select></label>
-      <label class="voice-setting">Table mode<select name="table_mode"><option value="summarize">Summarize</option><option value="read_all">Read all</option><option value="skip">Skip</option></select></label>
-      <label class="voice-setting">Diagram mode<select name="diagram_mode"><option value="describe">Describe</option><option value="skip">Skip</option></select></label>
-      <label class="voice-setting">Formula mode<select name="formula_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option></select></label>
-      <p id="preferences-status" class="upload-status" aria-live="polite">Loading saved preferences…</p><button class="button button--wide" type="submit">SAVE SETTINGS</button>
+      <div class="settings-tabs" role="tablist" aria-label="Settings sections"><button type="button" id="settings-tab-narration" role="tab" aria-controls="settings-panel-narration" aria-selected="true" data-settings-tab="narration">Narration</button><button type="button" id="settings-tab-processing" role="tab" aria-controls="settings-panel-processing" aria-selected="false" data-settings-tab="processing">Processing</button><button type="button" id="settings-tab-usage" role="tab" aria-controls="settings-panel-usage" aria-selected="false" data-settings-tab="usage">Usage &amp; cost</button></div>
+      <section id="settings-panel-narration" class="settings-tab-panel" role="tabpanel" aria-labelledby="settings-tab-narration" data-settings-panel="narration"><label class="voice-setting">Voice<select name="voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><p class="settings-warning">Changing the voice affects new books only. Existing books require audio reprocessing.</p><label class="voice-setting">Speech speed<select name="speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><label class="voice-setting">Reading style<select name="style"><option value="calm">Calm</option><option value="neutral">Neutral</option><option value="expressive">Expressive</option></select></label></section>
+      <section id="settings-panel-processing" class="settings-tab-panel" role="tabpanel" aria-labelledby="settings-tab-processing" data-settings-panel="processing" hidden><label class="voice-setting">Code mode<select name="code_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option><option value="hybrid">Hybrid</option></select></label><label class="voice-setting">Table mode<select name="table_mode"><option value="summarize">Summarize</option><option value="read_all">Read all</option><option value="skip">Skip</option></select></label><label class="voice-setting">Diagram mode<select name="diagram_mode"><option value="describe">Describe</option><option value="skip">Skip</option></select></label><label class="voice-setting">Formula mode<select name="formula_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option></select></label></section>
+      <section id="settings-panel-usage" class="settings-tab-panel settings-usage" role="tabpanel" aria-labelledby="settings-tab-usage" data-settings-panel="usage" hidden><p id="settings-usage-status" class="upload-status" aria-live="polite">Open this tab to load recorded usage.</p><div id="settings-usage-content"></div></section>
+      <div id="settings-save-actions" class="settings-save-actions"><p id="preferences-status" class="upload-status" aria-live="polite">Loading saved preferences…</p><button class="button button--wide" type="submit">SAVE SETTINGS</button></div>
     </form>
   `);
 
   const form = document.querySelector("#preferences-form");
   const statusMessage = document.querySelector("#preferences-status");
+  const saveActions = document.querySelector("#settings-save-actions");
+  const usageStatus = document.querySelector("#settings-usage-status");
+  const usageContent = document.querySelector("#settings-usage-content");
+  let usageLoaded = false;
+  const formatCost = (value) => `$${Number(value || 0).toFixed(4)}`;
+  const formatAddedDate = (value) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  const renderUsageSummary = (summary) => {
+    usageContent.innerHTML = `<div class="settings-usage-totals"><article><span>Total cost</span><strong>${formatCost(summary.total_cost_usd)}</strong><small>AI ${formatCost(summary.ai_cost_usd)} · TTS ${formatCost(summary.tts_cost_usd)}</small></article><article><span>AI tokens</span><strong>${Number(summary.input_tokens + summary.cached_input_tokens + summary.output_tokens).toLocaleString("en-US")}</strong><small>${Number(summary.input_tokens).toLocaleString("en-US")} input · ${Number(summary.output_tokens).toLocaleString("en-US")} output</small></article><article><span>Audio generated</span><strong>${formatPlaybackTime(summary.generated_audio_seconds)}</strong><small>${Number(summary.request_count).toLocaleString("en-US")} LLM requests · ${summary.total_books} books</small></article></div><section class="settings-usage-books"><div class="settings-usage-books__header"><span>Book</span><span>Added</span><span>Tokens</span><span>AI</span><span>TTS</span><span>Total</span></div>${summary.books.length ? summary.books.map((book) => `<a href="/books/${encodeURIComponent(book.id)}"><span><strong>${escapeHtml(book.title)}</strong><small>${escapeHtml(statusLabel(book.status))} · ${formatPlaybackTime(book.generated_audio_seconds)} audio</small></span><span>${formatAddedDate(book.created_at)}</span><span>${Number(book.input_tokens + book.cached_input_tokens + book.output_tokens).toLocaleString("en-US")}</span><span>${formatCost(book.ai_cost_usd)}</span><span>${formatCost(book.tts_cost_usd)}</span><strong>${formatCost(book.total_cost_usd)}</strong></a>`).join("") : '<p class="settings-usage-empty">No book usage has been recorded yet.</p>'}</section>`;
+  };
+  const loadUsageSummary = async () => {
+    if (usageLoaded) return;
+    usageStatus.textContent = "Loading recorded usage…";
+    try {
+      const response = await fetch("/api/v1/books/usage-summary");
+      if (!response.ok) throw new Error("Unable to load usage summary");
+      renderUsageSummary(await response.json());
+      usageStatus.hidden = true;
+      usageLoaded = true;
+    } catch (error) {
+      usageStatus.textContent = "Usage data is unavailable. Please try again later.";
+    }
+  };
+  const activateTab = (name) => {
+    document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
+      const active = tab.dataset.settingsTab === name;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-settings-panel]").forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== name; });
+    saveActions.hidden = name === "usage";
+    if (name === "usage") void loadUsageSummary();
+  };
+  document.querySelectorAll("[data-settings-tab]").forEach((tab) => tab.addEventListener("click", () => activateTab(tab.dataset.settingsTab)));
   try {
     const response = await fetch("/api/v1/settings/preferences");
     if (!response.ok) throw new Error("Unable to load preferences");

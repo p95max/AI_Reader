@@ -29,6 +29,7 @@ class Book(Base):
     author: Mapped[str] = mapped_column(
         String(255), default="Unknown author", server_default="Unknown author"
     )
+    publication_year: Mapped[int | None] = mapped_column(nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str] = mapped_column(String(512), unique=True)
     content_type: Mapped[str] = mapped_column(String(100), default="application/pdf")

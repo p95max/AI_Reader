@@ -12,6 +12,53 @@
   max-width: 760px;
 }
 
+.settings-page .settings-tabs {
+  background: #031323;
+  border: 1px solid #174f87;
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 26px;
+  padding: 4px;
+}
+
+.settings-page .settings-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #66bdf4;
+  cursor: pointer;
+  font: 700 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+  min-height: 40px;
+  padding: 8px;
+}
+
+.settings-page .settings-tabs button:hover {
+  background: #082844;
+  border-color: #246aa2;
+  color: #c9f4ff;
+}
+
+.settings-page .settings-tabs button.is-active {
+  background: linear-gradient(110deg, #31dcff, #559bff 64%, #9b5cff);
+  border-color: #76e7ff;
+  box-shadow: 0 0 14px #168cc055, inset 0 1px 0 #d8fbff55;
+  color: #03101d;
+}
+
+.settings-page .settings-tab-panel {
+  margin-top: 6px;
+}
+
+.settings-page .settings-save-actions {
+  margin-top: 18px;
+}
+
+.settings-page .settings-save-actions[hidden] {
+  display: none;
+}
+
 .settings-page .settings-control {
   align-items: center;
   display: grid;
@@ -24,6 +71,20 @@
   color: #dff8ff;
   font-size: 14px;
   line-height: 1.2;
+}
+
+.settings-page .settings-control--voice {
+  gap: 10px;
+  grid-template-columns: 1fr;
+}
+
+.settings-page .settings-control__hint {
+  color: #5faee0;
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  margin-top: 5px;
 }
 
 .settings-page .settings-segmented {
@@ -71,6 +132,73 @@
   transform: translateY(1px);
 }
 
+.settings-page .settings-voice-grid {
+  background: transparent;
+  border: 0;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  padding: 0;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card {
+  align-items: flex-start;
+  background: linear-gradient(145deg, #04182b, #04111f);
+  border: 1px solid #1b527d;
+  display: grid;
+  gap: 5px;
+  min-height: 72px;
+  overflow: hidden;
+  padding: 12px;
+  position: relative;
+  text-align: left;
+  white-space: normal;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card::after {
+  border: solid #d8fbff;
+  border-width: 0 2px 2px 0;
+  content: "";
+  height: 7px;
+  opacity: 0;
+  position: absolute;
+  right: 12px;
+  top: 11px;
+  transform: rotate(45deg);
+  width: 4px;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card strong {
+  color: #dff8ff;
+  font-size: 13px;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card span {
+  color: #67b9ed;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card:hover {
+  background: #082844;
+  border-color: #3bcffb;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card.is-active {
+  background: linear-gradient(135deg, #0a4c75, #234a9b 62%, #66399a);
+  border-color: #72e4ff;
+  box-shadow: 0 0 16px #168cc066, inset 3px 0 #51e0ff;
+  color: #fff;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card.is-active::after {
+  opacity: 1;
+}
+
+.settings-page .settings-voice-grid .settings-voice-card.is-active strong,
+.settings-page .settings-voice-grid .settings-voice-card.is-active span {
+  color: #effdff;
+}
+
 .settings-page .settings-native-select {
   position: absolute;
   width: 1px;
@@ -89,6 +217,107 @@
 
 .settings-page .button--wide {
   margin-top: 0;
+}
+
+.settings-page .settings-usage {
+  min-height: 250px;
+}
+
+.settings-page .settings-usage-totals {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.settings-page .settings-usage-totals article {
+  background: linear-gradient(145deg, #041a30, #061120);
+  border: 1px solid #1b527d;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+}
+
+.settings-page .settings-usage-totals article:first-child {
+  border-color: #9a5cff;
+  box-shadow: inset 3px 0 #44dfff;
+}
+
+.settings-page .settings-usage-totals span,
+.settings-page .settings-usage-totals small {
+  color: #5faee0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.settings-page .settings-usage-totals strong {
+  color: #d9f9ff;
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-page .settings-usage-books {
+  border: 1px solid #1b527d;
+  margin-top: 18px;
+}
+
+.settings-page .settings-usage-books__header,
+.settings-page .settings-usage-books > a {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 1fr) 86px 72px 68px 68px 72px;
+}
+
+.settings-page .settings-usage-books__header {
+  background: #06182a;
+  color: #5faee0;
+  font-size: 9px;
+  padding: 9px 11px;
+  text-transform: uppercase;
+}
+
+.settings-page .settings-usage-books > a {
+  background: #04101e;
+  border-top: 1px solid #133d60;
+  color: #9edfff;
+  font-size: 10px;
+  min-height: 58px;
+  padding: 9px 11px;
+  text-decoration: none;
+}
+
+.settings-page .settings-usage-books > a:hover {
+  background: #082844;
+}
+
+.settings-page .settings-usage-books > a > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-page .settings-usage-books > a strong {
+  color: #e0faff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-page .settings-usage-books > a small {
+  color: #5faee0;
+  font-size: 9px;
+}
+
+.settings-page .settings-usage-empty {
+  color: #6abce9;
+  font-size: 12px;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
 }
 
 @media (max-width: 720px) {
@@ -116,5 +345,34 @@
 
   .settings-page .settings-segmented button {
     min-width: 82px;
+  }
+
+  .settings-page .settings-tabs {
+    margin-top: 20px;
+  }
+
+  .settings-page .settings-tabs button {
+    font-size: 10px;
+  }
+
+  .settings-page .settings-usage-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page .settings-usage-books {
+    overflow-x: auto;
+  }
+
+  .settings-page .settings-usage-books__header,
+  .settings-page .settings-usage-books > a {
+    min-width: 650px;
+  }
+
+  .settings-page .settings-voice-grid {
+    overflow: visible;
+  }
+
+  .settings-page .settings-voice-grid .settings-voice-card {
+    min-width: 0;
   }
 }

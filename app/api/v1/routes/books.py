@@ -31,15 +31,18 @@ from app.schemas.books import (
     BookProgressRead,
     BookRead,
     BookTTSSettingsUpdate,
+    BookUsageSummaryRead,
     PlaybackPositionRead,
     PlaybackPositionUpdate,
 )
 from app.services.book_cost import BookCostService
 from app.services.book_estimate import estimate_book_processing_with_pricing
 from app.services.book_library import build_book_library_item
+from app.services.book_metadata import extract_pdf_book_metadata
 from app.services.book_progress import BookProgressService
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
 from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
+from app.services.usage_summary import UsageSummaryService
 from app.services.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
 
 router = APIRouter()
@@ -113,6 +116,41 @@ async def list_books(
         )
         for book in books
     ]
+
+
+@router.get("/usage-summary", response_model=BookUsageSummaryRead)
+async def get_usage_summary(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> BookUsageSummaryRead:
+    summary = await UsageSummaryService(session).get()
+    return BookUsageSummaryRead(
+        total_books=summary.total_books,
+        input_tokens=summary.input_tokens,
+        cached_input_tokens=summary.cached_input_tokens,
+        output_tokens=summary.output_tokens,
+        request_count=summary.request_count,
+        ai_cost_usd=summary.ai_cost_usd,
+        tts_cost_usd=summary.tts_cost_usd,
+        total_cost_usd=summary.total_cost_usd,
+        generated_audio_seconds=summary.generated_audio_seconds,
+        books=[
+            {
+                "id": item.id,
+                "title": item.title,
+                "status": item.status,
+                "created_at": item.created_at,
+                "input_tokens": item.input_tokens,
+                "cached_input_tokens": item.cached_input_tokens,
+                "output_tokens": item.output_tokens,
+                "request_count": item.request_count,
+                "ai_cost_usd": item.ai_cost_usd,
+                "tts_cost_usd": item.tts_cost_usd,
+                "total_cost_usd": item.total_cost_usd,
+                "generated_audio_seconds": item.generated_audio_seconds,
+            }
+            for item in summary.books
+        ],
+    )
 
 
 @router.get("/{book_id}", response_model=BookRead)
@@ -316,13 +354,15 @@ async def create_book(
         ) from error
 
     filename = _normalized_filename(file)
+    extracted_metadata = await run_in_threadpool(extract_pdf_book_metadata, temporary_path, filename)
     pricing = settings.pricing_for_model()
     estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
     preferences = await get_or_create_user_preferences(session, settings)
     book = Book(
         user_id=preferences.user_id,
-        title=Path(filename).stem[:255] or "Untitled book",
-        author="Unknown author",
+        title=extracted_metadata.title,
+        author=extracted_metadata.author,
+        publication_year=extracted_metadata.publication_year,
         original_filename=filename,
         storage_key="pending",
         content_type="application/pdf",
