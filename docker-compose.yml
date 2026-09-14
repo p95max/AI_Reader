@@ -141,7 +141,7 @@ services:
   worker-processing:
     <<: [*app-image, *app-code]
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --loglevel=INFO" /app/app
+    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --concurrency=2 --loglevel=INFO" /app/app
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -154,7 +154,7 @@ services:
   worker-tts:
     <<: [*tts-image, *tts-build]
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --loglevel=INFO" /app/app
+    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --concurrency=1 --prefetch-multiplier=1 --loglevel=INFO" /app/app
     volumes:
       - ./app:/app/app:ro
       - ./alembic:/app/alembic:ro
