@@ -68,12 +68,14 @@ function shell(content) {
       </aside>
       <main class="app-shell"><div id="background-status" role="status" aria-live="polite" hidden></div>${content}</main>
       <footer id="mini-player" class="mini-player" aria-label="Mini player" hidden>
-        <a id="mini-player-open" class="mini-player__open" href="/player">
-          <span class="mini-player__icon" aria-hidden="true">▶</span>
+        <div class="mini-player__details">
           <span class="mini-player__copy"><small>NOW PLAYING</small><strong id="mini-player-title">Loading your latest book…</strong><span id="mini-player-segment">Preparing audio</span></span>
-        </a>
+          <label class="mini-player__timeline" for="mini-player-seek"><output id="mini-player-current-time">0:00</output><input id="mini-player-seek" type="range" min="0" max="0" value="0" step="0.1" aria-label="Playback position"><output id="mini-player-total-time">0:00</output></label>
+        </div>
         <audio id="mini-player-audio" preload="metadata"></audio>
-        <button id="mini-player-play" type="button" aria-label="Play" title="Play">▶</button>
+        <div class="mini-player__controls" aria-label="Playback controls"><button id="mini-player-previous" type="button" aria-label="Previous segment" title="Previous segment">◀◀</button><button id="mini-player-play" type="button" aria-label="Play" title="Play">▶</button><button id="mini-player-next" type="button" aria-label="Next segment" title="Next segment">▶▶</button></div>
+        <label class="mini-player__volume" for="mini-player-volume">VOL<input id="mini-player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-label="Volume"></label>
+        <a id="mini-player-open" class="mini-player__full" href="/player">Open full player ↗</a>
       </footer>
       <nav class="mobile-navigation" aria-label="Mobile navigation">${navigation()}</nav>
     </div>
@@ -86,10 +88,16 @@ async function initializeMiniPlayer() {
   const player = document.querySelector("#mini-player");
   const audio = document.querySelector("#mini-player-audio");
   const playButton = document.querySelector("#mini-player-play");
+  const previousButton = document.querySelector("#mini-player-previous");
+  const nextButton = document.querySelector("#mini-player-next");
+  const seek = document.querySelector("#mini-player-seek");
+  const currentTime = document.querySelector("#mini-player-current-time");
+  const totalTime = document.querySelector("#mini-player-total-time");
+  const volume = document.querySelector("#mini-player-volume");
   const title = document.querySelector("#mini-player-title");
   const segment = document.querySelector("#mini-player-segment");
   const openLink = document.querySelector("#mini-player-open");
-  if (!player || !audio || !playButton || !title || !segment || !openLink) return;
+  if (!player || !audio || !playButton || !previousButton || !nextButton || !seek || !currentTime || !totalTime || !volume || !title || !segment || !openLink) return;
 
   try {
     const libraryResponse = await fetch("/api/v1/books", { signal: AbortSignal.timeout(10_000) });
@@ -108,10 +116,12 @@ async function initializeMiniPlayer() {
       const chunks = await audioResponse.json();
       if (!chunks.length) continue;
       const playback = playbackResponse.ok ? await playbackResponse.json() : null;
-      let currentChunk = Math.max(0, chunks.findIndex((chunk) => chunk.id === playback?.audio_chunk_id));
+      let currentChunk = chunks.findIndex((chunk) => chunk.id === playback?.audio_chunk_id);
       if (currentChunk < 0) currentChunk = 0;
+      let lastPersistedAt = 0;
       const savedVolume = Number(window.localStorage.getItem("ai-reader:volume"));
       audio.volume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1 ? savedVolume : 1;
+      volume.value = String(audio.volume);
 
       const setButton = () => {
         const playing = !audio.paused;
@@ -119,14 +129,48 @@ async function initializeMiniPlayer() {
         playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
         playButton.title = playing ? "Pause" : "Play";
       };
-      const loadChunk = (index, positionMilliseconds = 0) => {
+      const getDuration = () => Number.isFinite(audio.duration) ? audio.duration : (chunks[currentChunk]?.duration_milliseconds ?? 0) / 1_000;
+      const updateTimeline = () => {
+        const duration = getDuration();
+        seek.max = String(duration || 0);
+        seek.value = String(Math.min(audio.currentTime || 0, duration || 0));
+        currentTime.textContent = formatPlaybackTime(audio.currentTime || 0);
+        totalTime.textContent = formatPlaybackTime(duration);
+      };
+      const updateSegmentControls = () => {
+        previousButton.disabled = currentChunk === 0;
+        nextButton.disabled = currentChunk >= chunks.length - 1;
+      };
+      const persistPlayback = async ({ force = false, keepalive = false } = {}) => {
+        const chunk = chunks[currentChunk];
+        const now = Date.now();
+        if (!chunk || (!force && now - lastPersistedAt < 5_000)) return;
+        lastPersistedAt = now;
+        try {
+          await fetch(`/api/v1/books/${encodeURIComponent(book.id)}/playback`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ audio_chunk_id: chunk.id, position_milliseconds: Math.round((audio.currentTime || 0) * 1_000) }),
+            keepalive,
+          });
+        } catch (error) {
+          // Playback continues even if saving the resume point is temporarily unavailable.
+        }
+      };
+      const loadChunk = async (index, positionMilliseconds = 0, shouldPlay = false) => {
+        if (index < 0 || index >= chunks.length) return;
+        if (audio.src && index !== currentChunk) await persistPlayback({ force: true });
         currentChunk = index;
         const chunk = chunks[currentChunk];
         audio.src = chunk.stream_url;
         segment.textContent = `Segment ${currentChunk + 1} of ${chunks.length}`;
+        updateSegmentControls();
+        updateTimeline();
         audio.load();
         audio.addEventListener("loadedmetadata", () => {
           if (positionMilliseconds) audio.currentTime = Math.min(positionMilliseconds / 1_000, audio.duration || 0);
+          updateTimeline();
+          if (shouldPlay) audio.play().catch(() => { setButton(); });
         }, { once: true });
       };
 
@@ -139,17 +183,28 @@ async function initializeMiniPlayer() {
           try { await audio.play(); } catch (error) { segment.textContent = "Press play again to start audio"; }
         } else audio.pause();
       });
+      previousButton.addEventListener("click", () => { void loadChunk(currentChunk - 1, 0, !audio.paused); });
+      nextButton.addEventListener("click", () => { void loadChunk(currentChunk + 1, 0, !audio.paused); });
+      seek.addEventListener("input", () => { audio.currentTime = Number(seek.value); updateTimeline(); });
+      seek.addEventListener("change", () => { void persistPlayback({ force: true }); });
+      volume.addEventListener("input", () => {
+        audio.volume = Number(volume.value);
+        window.localStorage.setItem("ai-reader:volume", String(audio.volume));
+      });
+      audio.addEventListener("loadedmetadata", updateTimeline);
+      audio.addEventListener("timeupdate", () => { updateTimeline(); void persistPlayback(); });
       audio.addEventListener("play", setButton);
-      audio.addEventListener("pause", setButton);
+      audio.addEventListener("pause", () => { setButton(); void persistPlayback({ force: true }); });
       audio.addEventListener("ended", async () => {
+        await persistPlayback({ force: true });
         if (currentChunk < chunks.length - 1) {
-          loadChunk(currentChunk + 1);
-          try { await audio.play(); } catch (error) { setButton(); }
+          await loadChunk(currentChunk + 1, 0, true);
         } else {
           segment.textContent = "Book playback complete";
           setButton();
         }
       });
+      window.addEventListener("pagehide", () => { void persistPlayback({ force: true, keepalive: true }); }, { once: true });
       return;
     }
   } catch (error) {
