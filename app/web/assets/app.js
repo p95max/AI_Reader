@@ -400,6 +400,7 @@ async function renderBookPage() {
   let pendingSeekSeconds = null;
   let lastPersistedAt = 0;
   let audioRetryAttempts = 0;
+  let backgroundRefreshTimer = null;
 
   if (window.matchMedia("(max-width: 850px)").matches) usagePanel.open = false;
 
@@ -453,6 +454,40 @@ async function renderBookPage() {
     const playing = !audio.paused;
     playPause.textContent = playing ? "Ⅱ" : "▶";
     playPause.setAttribute("aria-label", playing ? "Pause" : "Play");
+  };
+  const refreshBackgroundProgress = async () => {
+    if (document.visibilityState === "hidden") return;
+    try {
+      const [audioResponse, progressResponse] = await Promise.all([
+        fetch(`/api/v1/books/${encodeURIComponent(bookId)}/audio`),
+        fetch(`/api/v1/books/${encodeURIComponent(bookId)}/progress`),
+      ]);
+      if (!audioResponse.ok || !progressResponse.ok) return;
+
+      const refreshedChunks = await audioResponse.json();
+      const progress = await progressResponse.json();
+      const hadNoAudio = chunks.length === 0;
+      chunks = refreshedChunks;
+      chapters = progress.chapters;
+      drawChapterNavigation();
+      setControlsEnabled(chunks.length > 0);
+
+      if (hadNoAudio && chunks.length) {
+        statusMessage.classList.remove("player-processing-status");
+        await selectChunk(0);
+        statusMessage.textContent = "Your first audio segment is ready.";
+      }
+      if (progress.total_chunks > 0 && progress.ready_chunks === progress.total_chunks) {
+        window.clearInterval(backgroundRefreshTimer);
+        backgroundRefreshTimer = null;
+      }
+    } catch (error) {
+      // Keep the currently rendered state; the next background check can recover.
+    }
+  };
+  const startBackgroundRefresh = () => {
+    if (backgroundRefreshTimer !== null) return;
+    backgroundRefreshTimer = window.setInterval(refreshBackgroundProgress, 7_000);
   };
   const persistPlayback = async ({ force = false, keepalive = false } = {}) => {
     const chunk = chunks[currentChunk];
@@ -572,7 +607,10 @@ async function renderBookPage() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") persistPlayback({ force: true, keepalive: true });
   });
-  window.addEventListener("pagehide", () => { persistPlayback({ force: true, keepalive: true }); });
+  window.addEventListener("pagehide", () => {
+    persistPlayback({ force: true, keepalive: true });
+    window.clearInterval(backgroundRefreshTimer);
+  });
 
   try {
     const [bookResponse, audioResponse, progressResponse, playbackResponse] = await Promise.all([
@@ -595,6 +633,7 @@ async function renderBookPage() {
     await loadUsage();
     window.setInterval(loadUsage, 15_000);
     setControlsEnabled(chunks.length > 0);
+    startBackgroundRefresh();
     if (!chunks.length) {
       statusMessage.classList.add("player-processing-status");
       statusMessage.innerHTML = '<span>Preparing your first audio segment</span><span class="processing-line" aria-hidden="true"><i></i></span><span class="processing-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>';
