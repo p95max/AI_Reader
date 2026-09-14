@@ -32,6 +32,8 @@ def test_frontend_assets_are_served() -> None:
 
     assert response.status_code == 200
     assert "currentPage" in response.text
+    assert 'id="mini-player"' in response.text
+    assert '["/player", "player", "Player"]' not in response.text
 
 
 def test_frontend_document_declares_english_interface_language() -> None:

@@ -36,13 +36,11 @@ function navigation() {
   return [
     ["/library", "library", "Library"],
     ["/upload", "upload", "Add Book"],
-    ["/player", "player", "Player"],
     ["/settings", "settings", "Settings"],
   ]
     .map((path) => {
       const [href, iconName, label] = path;
-      const isPlayerPage = href === "/player" && window.location.pathname.startsWith("/books/");
-      const active = href === window.location.pathname || isPlayerPage ? ' aria-current="page"' : "";
+      const active = href === window.location.pathname ? ' aria-current="page"' : "";
       return `<a href="${href}"${active}>${navigationIcon(iconName)}${label}</a>`;
     })
     .join("");
@@ -52,13 +50,13 @@ function navigationIcon(name) {
   const paths = {
     library: '<path d="M4 5h16v15H4zM8 5v15M11 9h5M11 13h5"/>',
     upload: '<path d="M12 15V3m0 0L7 8m5-5 5 5M5 16v4h14v-4"/>',
-    player: '<path d="M5 4h14v16H5zM10 9l5 3-5 3z"/>',
     settings: '<path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm0-12.2v2m0 14v2m9-9h-2M5 12H3m15.4-6.4-1.4 1.4M7 17l-1.4 1.4m12.8 0L17 17M7 7 5.6 5.6"/>',
   };
   return `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name]}</svg>`;
 }
 
 function shell(content) {
+  queueMicrotask(() => { void initializeMiniPlayer(); });
   return `
     <div class="app-frame">
       <aside class="sidebar">
@@ -69,9 +67,94 @@ function shell(content) {
         <small class="version">v0.1.0</small>
       </aside>
       <main class="app-shell"><div id="background-status" role="status" aria-live="polite" hidden></div>${content}</main>
+      <footer id="mini-player" class="mini-player" aria-label="Mini player" hidden>
+        <a id="mini-player-open" class="mini-player__open" href="/player">
+          <span class="mini-player__icon" aria-hidden="true">▶</span>
+          <span class="mini-player__copy"><small>NOW PLAYING</small><strong id="mini-player-title">Loading your latest book…</strong><span id="mini-player-segment">Preparing audio</span></span>
+        </a>
+        <audio id="mini-player-audio" preload="metadata"></audio>
+        <button id="mini-player-play" type="button" aria-label="Play" title="Play">▶</button>
+      </footer>
       <nav class="mobile-navigation" aria-label="Mobile navigation">${navigation()}</nav>
     </div>
 `;
+}
+
+async function initializeMiniPlayer() {
+  if (window.location.pathname.startsWith("/books/")) return;
+
+  const player = document.querySelector("#mini-player");
+  const audio = document.querySelector("#mini-player-audio");
+  const playButton = document.querySelector("#mini-player-play");
+  const title = document.querySelector("#mini-player-title");
+  const segment = document.querySelector("#mini-player-segment");
+  const openLink = document.querySelector("#mini-player-open");
+  if (!player || !audio || !playButton || !title || !segment || !openLink) return;
+
+  try {
+    const libraryResponse = await fetch("/api/v1/books", { signal: AbortSignal.timeout(10_000) });
+    if (!libraryResponse.ok) throw new Error("Unable to load the library");
+    const books = await libraryResponse.json();
+    const lastBookId = window.localStorage.getItem("ai-reader:last-book-id");
+    const preferred = books.find((book) => book.id === lastBookId);
+    const candidates = [preferred, ...books.filter((book) => book !== preferred && book.status === "ready"), ...books.filter((book) => book !== preferred && book.status !== "ready")].filter(Boolean);
+
+    for (const book of candidates) {
+      const [audioResponse, playbackResponse] = await Promise.all([
+        fetch(`/api/v1/books/${encodeURIComponent(book.id)}/audio`, { signal: AbortSignal.timeout(10_000) }),
+        fetch(`/api/v1/books/${encodeURIComponent(book.id)}/playback`, { signal: AbortSignal.timeout(10_000) }),
+      ]);
+      if (!audioResponse.ok) continue;
+      const chunks = await audioResponse.json();
+      if (!chunks.length) continue;
+      const playback = playbackResponse.ok ? await playbackResponse.json() : null;
+      let currentChunk = Math.max(0, chunks.findIndex((chunk) => chunk.id === playback?.audio_chunk_id));
+      if (currentChunk < 0) currentChunk = 0;
+      const savedVolume = Number(window.localStorage.getItem("ai-reader:volume"));
+      audio.volume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1 ? savedVolume : 1;
+
+      const setButton = () => {
+        const playing = !audio.paused;
+        playButton.textContent = playing ? "Ⅱ" : "▶";
+        playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
+        playButton.title = playing ? "Pause" : "Play";
+      };
+      const loadChunk = (index, positionMilliseconds = 0) => {
+        currentChunk = index;
+        const chunk = chunks[currentChunk];
+        audio.src = chunk.stream_url;
+        segment.textContent = `Segment ${currentChunk + 1} of ${chunks.length}`;
+        audio.load();
+        audio.addEventListener("loadedmetadata", () => {
+          if (positionMilliseconds) audio.currentTime = Math.min(positionMilliseconds / 1_000, audio.duration || 0);
+        }, { once: true });
+      };
+
+      title.textContent = book.title;
+      openLink.href = `/books/${encodeURIComponent(book.id)}`;
+      loadChunk(currentChunk, playback?.position_milliseconds ?? 0);
+      player.hidden = false;
+      playButton.addEventListener("click", async () => {
+        if (audio.paused) {
+          try { await audio.play(); } catch (error) { segment.textContent = "Press play again to start audio"; }
+        } else audio.pause();
+      });
+      audio.addEventListener("play", setButton);
+      audio.addEventListener("pause", setButton);
+      audio.addEventListener("ended", async () => {
+        if (currentChunk < chunks.length - 1) {
+          loadChunk(currentChunk + 1);
+          try { await audio.play(); } catch (error) { setButton(); }
+        } else {
+          segment.textContent = "Book playback complete";
+          setButton();
+        }
+      });
+      return;
+    }
+  } catch (error) {
+    // The mini player is supplementary; the page remains usable if its request fails.
+  }
 }
 
 function statusLabel(status) {
@@ -321,7 +404,7 @@ async function renderSettings() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Settings)</span><span>◉ USER⌄</span></header>
     <form id="preferences-form" class="feature-page settings-page"><a class="back-link" href="/library">← Library</a><h1>SETTINGS</h1><p>Choose defaults for books you process next.</p>
-      <label class="voice-setting">Voice<select name="voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label>
+      <label class="voice-setting">Voice<select name="voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><p class="settings-warning">Changing the voice affects new books only. Existing books require audio reprocessing.</p>
       <label class="voice-setting">Speech speed<select name="speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label>
       <label class="voice-setting">Reading style<select name="style"><option value="calm">Calm</option><option value="neutral">Neutral</option><option value="expressive">Expressive</option></select></label>
       <label class="voice-setting">Code mode<select name="code_mode"><option value="explain">Explain</option><option value="read">Read</option><option value="skip">Skip</option><option value="hybrid">Hybrid</option></select></label>
