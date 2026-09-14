@@ -17,6 +17,8 @@ class FakeGenerator:
     def __init__(self, *, failure_index: int | None = None) -> None:
         self.failure_index = failure_index
         self.generated_indexes: list[int] = []
+        self.tts_provider = "openai"
+        self.tts_model = "gpt-4o-mini-tts"
 
     def split_narration(self, _narration: str) -> list[str]:
         return ["Первый chunk.", "Второй chunk."]
@@ -57,6 +59,8 @@ class MemoryCheckpointStore:
         chunk: GeneratedAudioChunk,
         *,
         voice: str,
+        tts_provider: str | None,
+        tts_model: str | None,
         attempt_count: int,
         generation_time_milliseconds: int,
         tts_cost_usd: float,
@@ -123,6 +127,8 @@ async def test_failed_chunk_is_checkpointed_for_retry(caplog: pytest.LogCaptureF
             "narration": "Второй chunk.",
             "storage_key": f"books/{BOOK_ID}/audio/000001.wav",
             "voice": "Narrator",
+            "tts_provider": "openai",
+            "tts_model": "gpt-4o-mini-tts",
             "attempt_count": 3,
             "error_message": "provider unavailable",
         }

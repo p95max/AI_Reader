@@ -41,13 +41,9 @@ class Settings(BaseSettings):
     ai_pricing_version: str = Field(default="default", min_length=1, max_length=100)
     ai_model_price_list: dict[str, ModelPricing] = Field(default_factory=dict)
     narration_cache_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, ge=1)
-    # TTS is deliberately provider-agnostic: another backend can be registered without
-    # changing Celery tasks or callers.
-    tts_provider: str = "qwen"
-    tts_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
-    tts_device: Literal["cpu", "cuda"] = "cpu"
-    tts_voice: str = "Ryan"
-    tts_language: str = "Russian"
+    # OpenAI TTS is the single supported synthesis backend. There is no local
+    # model, CUDA configuration, or model download in the service image.
+    tts_voice: str = "alloy"
     tts_instruction: str = "Говори ясно, естественно и спокойно."
     tts_openai_model: str = "gpt-4o-mini-tts"
     tts_openai_voice: str = "alloy"
@@ -55,7 +51,6 @@ class Settings(BaseSettings):
     tts_openai_normal_speed: float = Field(default=1.0, ge=0.25, le=4.0)
     tts_openai_slow_speed: float = Field(default=0.85, ge=0.25, le=4.0)
     tts_external_cost_per_audio_hour_usd: float = Field(default=0.0, ge=0)
-    tts_gpu_cost_per_hour_usd: float = Field(default=0.0, ge=0)
     tts_chunk_max_characters: int = Field(default=1_200, ge=100)
     tts_max_attempts: int = Field(default=3, ge=1)
     progressive_priority_chapter_count: int = Field(default=2, ge=1)

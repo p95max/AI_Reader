@@ -75,6 +75,8 @@ class ResilientTTSProcessor:
                     narration=text,
                     storage_key=audio_storage_key(book_id, chunk_index),
                     voice=voice,
+                    tts_provider=self._generator.tts_provider,
+                    tts_model=self._generator.tts_model,
                     attempt_count=attempt_count,
                     error_message=str(error),
                 )
@@ -102,6 +104,8 @@ class ResilientTTSProcessor:
                 book_id,
                 chunk,
                 voice=voice,
+                tts_provider=chunk.tts_provider,
+                tts_model=chunk.tts_model,
                 attempt_count=attempt_count,
                 generation_time_milliseconds=elapsed_ms,
                 tts_cost_usd=tts_cost_usd,

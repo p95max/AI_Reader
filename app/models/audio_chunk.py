@@ -53,6 +53,8 @@ class AudioChunk(Base):
         default=AudioChunkStatus.PENDING,
     )
     voice: Mapped[str | None] = mapped_column(String(100))
+    tts_provider: Mapped[str | None] = mapped_column(String(100))
+    tts_model: Mapped[str | None] = mapped_column(String(255))
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     generation_time_milliseconds: Mapped[int | None] = mapped_column(Integer)
     tts_cost_usd: Mapped[float] = mapped_column(Numeric(16, 8), default=0)

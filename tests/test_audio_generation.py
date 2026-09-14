@@ -23,6 +23,9 @@ def wav_bytes(*, sample_rate: int = 1_000, frames: int = 1_500) -> bytes:
 
 
 class FakeSynthesizer:
+    provider_name = "openai"
+    model_name = "gpt-4o-mini-tts"
+
     def __init__(self) -> None:
         self.requests: list[SpeechRequest] = []
 
@@ -72,6 +75,9 @@ def test_generator_saves_wav_and_duration_for_every_chunk() -> None:
         "books/12345678-1234-5678-1234-567812345678/audio/000001.wav",
     ]
     assert list(storage.objects) == [chunk.storage_key for chunk in chunks]
+    assert {(chunk.tts_provider, chunk.tts_model) for chunk in chunks} == {
+        ("openai", "gpt-4o-mini-tts")
+    }
     assert len(synthesizer.requests) == 2
 
 

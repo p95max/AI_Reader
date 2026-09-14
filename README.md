@@ -10,9 +10,9 @@ docker compose up --build -d
 ```
 
 Compose поднимает PostgreSQL, Redis, MinIO, миграции Alembic, FastAPI и два
-Celery worker (обработка PDF и CPU-TTS). Миграции применяются до старта API и
-worker автоматически. API и PDF-worker не содержат PyTorch/Qwen; тяжёлые
-библиотеки находятся только в TTS-образе.
+Celery worker (обработка PDF и внешний OpenAI TTS). Миграции применяются до
+старта API и worker автоматически. Все Python-сервисы используют один компактный
+образ: локальные TTS-модели, PyTorch, CUDA и кеш Hugging Face не устанавливаются.
 
 Сервис будет доступен на `http://127.0.0.1:8000` (или на значении `APP_PORT`).
 Интерактивная спецификация API: `http://127.0.0.1:8000/docs`.
@@ -36,7 +36,7 @@ docker compose run --rm migrate
 docker compose down
 ```
 
-Для полного сброса данных и скачанной TTS-модели:
+Для полного сброса данных:
 
 ```bash
 docker compose down -v
@@ -54,9 +54,11 @@ Python-кода. Пересборка нужна только после изм�
 docker compose up --build -d
 ```
 
-По умолчанию выбран Qwen3-TTS 1.7B. Провайдер, модель, голос, язык и базовая
-инструкция задаются переменными `AI_READER_TTS_*`; задача и остальной код не
-привязаны к Qwen, поэтому новый провайдер подключается через адаптер TTS.
+По умолчанию используется внешний OpenAI TTS `gpt-4o-mini-tts`. Задайте
+`AI_READER_OPENAI_API_KEY`, при необходимости измените
+`AI_READER_TTS_OPENAI_MODEL`, голос и инструкцию. TTS-worker выполняет не более
+двух запросов одновременно (`AI_READER_TTS_WORKER_CONCURRENCY`), что можно
+снизить при ограниченном API-тарифе.
 
 ### Стоимость LLM
 
@@ -74,25 +76,10 @@ AI_READER_AI_MODEL_PRICE_LIST='{"gpt-5.6-luna":{"input_per_million_tokens":2.0,"
 `AI_READER_AI_*_COST_PER_MILLION_TOKENS` и `AI_READER_AI_PRICING_VERSION`.
 
 Для TTS укажите цену внешнего провайдера за час готового аудио через
-`AI_READER_TTS_EXTERNAL_COST_PER_AUDIO_HOUR_USD`. При локальной CUDA-генерации
-можно дополнительно учесть реальное время работы GPU переменной
-`AI_READER_TTS_GPU_COST_PER_HOUR_USD`. Оба значения по умолчанию равны нулю.
-
-### GPU для TTS (опционально)
-
-На машине с NVIDIA GPU, CUDA 12.8-совместимым драйвером и NVIDIA Container
-Toolkit замените CPU-worker на GPU-worker:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
-```
-
-Этот режим собирает отдельный образ только для TTS и задаёт
-`AI_READER_TTS_DEVICE=cuda`. CPU-образ не содержит CUDA-библиотек. Если GPU
-недоступен, используйте обычную команду `docker compose up --build -d`.
+`AI_READER_TTS_EXTERNAL_COST_PER_AUDIO_HOUR_USD`; по умолчанию она равна нулю.
 
 PostgreSQL, Redis и MinIO доступны только внутри Docker-сети. Для диагностики
-используйте `docker compose exec`; данные и кеш модели хранятся в named volumes.
+используйте `docker compose exec`; данные хранятся в named volumes.
 
 ## Локальный запуск без Docker
 
@@ -109,12 +96,6 @@ uv run uvicorn app.main:app --reload
 ```bash
 uv run celery -A app.workers.celery_app worker -Q processing --loglevel=INFO
 uv run celery -A app.workers.celery_app worker -Q tts --loglevel=INFO
-```
-
-Для локального запуска Qwen TTS добавьте CPU-вариант зависимостей:
-
-```bash
-uv sync --all-groups --extra tts-cpu
 ```
 
 ## Команды разработки

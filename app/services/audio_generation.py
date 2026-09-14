@@ -64,6 +64,8 @@ class GeneratedAudioChunk:
     storage_key: str
     content_type: str
     duration_milliseconds: int
+    tts_provider: str | None = None
+    tts_model: str | None = None
 
     def as_task_payload(self) -> dict[str, str | int]:
         return {
@@ -114,6 +116,15 @@ class AudioChunkGenerator:
     def split_narration(self, narration: str) -> list[str]:
         return self._chunker.split(narration)
 
+    @property
+    def tts_provider(self) -> str:
+        return str(getattr(self._synthesizer, "provider_name", "openai"))
+
+    @property
+    def tts_model(self) -> str | None:
+        model = getattr(self._synthesizer, "model_name", None)
+        return str(model) if model is not None else None
+
     def generate_chunk(
         self,
         book_id: UUID,
@@ -135,6 +146,8 @@ class AudioChunkGenerator:
             storage_key=storage_key,
             content_type=audio.mime_type,
             duration_milliseconds=wav_duration_milliseconds(audio.content),
+            tts_provider=self.tts_provider,
+            tts_model=self.tts_model,
         )
 
 

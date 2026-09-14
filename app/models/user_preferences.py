@@ -18,7 +18,7 @@ class UserPreferences(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    voice: Mapped[str] = mapped_column(String(100), default="Ryan")
+    voice: Mapped[str] = mapped_column(String(100), default="alloy")
     speed: Mapped[str] = mapped_column(String(20), default="normal")
     style: Mapped[str] = mapped_column(String(20), default="neutral")
     code_mode: Mapped[str] = mapped_column(String(20), default="hybrid")

@@ -1,16 +1,10 @@
-"""Extensible text-to-speech boundary.
-
-Callers know only :class:`SpeechSynthesizer`.  Provider-specific loading and
-audio encoding live behind adapters, so moving from Qwen to another service
-does not affect task payloads or the worker contract.
-"""
+"""OpenAI text-to-speech boundary used by the background TTS worker."""
 
 from __future__ import annotations
 
 import base64
 import io
 import wave
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
@@ -67,17 +61,6 @@ class SpeechSynthesizer(Protocol):
     def synthesize(self, request: SpeechRequest) -> AudioResult: ...
 
 
-class QwenModel(Protocol):
-    def generate_custom_voice(
-        self,
-        text: str,
-        speaker: str,
-        language: str | None = None,
-        instruct: str | None = None,
-        **kwargs: Any,
-    ) -> tuple[list[Any], int]: ...
-
-
 class OpenAITextToSpeechClient(Protocol):
     def create(self, **kwargs: Any) -> Any: ...
 
@@ -107,50 +90,19 @@ def speech_instruction(
     return f"{settings.tts_instruction.strip()} {pace} {delivery}"
 
 
-class QwenTTSSynthesizer:
-    """Qwen3-TTS adapter with lazy model initialisation."""
-
-    def __init__(
-        self,
-        settings: Settings,
-        *,
-        model_loader: Callable[[Settings], QwenModel] | None = None,
-        wav_encoder: Callable[[Any, int], bytes] | None = None,
-    ) -> None:
-        self._settings = settings
-        self._model_loader = model_loader or _load_qwen_model
-        self._wav_encoder = wav_encoder or _encode_wav
-        self._model: QwenModel | None = None
-
-    def synthesize(self, request: SpeechRequest) -> AudioResult:
-        model = self._model or self._load_model()
-        waveforms, sample_rate = model.generate_custom_voice(
-            request.text,
-            speaker=request.voice or self._settings.tts_voice,
-            language=self._settings.tts_language,
-            instruct=speech_instruction(self._settings, request.speed, request.style),
-            non_streaming_mode=True,
-        )
-        if not waveforms:
-            raise TTSError("Qwen returned no audio")
-        return AudioResult(
-            content=self._wav_encoder(waveforms[0], sample_rate),
-            sample_rate=sample_rate,
-        )
-
-    def _load_model(self) -> QwenModel:
-        self._model = self._model_loader(self._settings)
-        return self._model
-
-
 OPENAI_TTS_VOICES = frozenset(
-    {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"}
+    {
+        "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin",
+        "nova", "onyx", "sage", "shimmer", "verse",
+    }
 )
 _LEGACY_OPENAI_VOICE_MAP = {"ryan": "onyx", "aiden": "echo", "vivian": "nova"}
 
 
 class OpenAITTSSynthesizer:
-    """OpenAI TTS adapter returning the same WAV result as the local provider."""
+    """OpenAI TTS adapter returning WAV audio for storage and playback."""
+
+    provider_name = "openai"
 
     def __init__(self, settings: Settings, *, client: OpenAITTSClient | None = None) -> None:
         self._settings = settings
@@ -199,59 +151,15 @@ class OpenAITTSSynthesizer:
             else self._settings.tts_openai_normal_speed
         )
 
-
-ProviderFactory = Callable[[Settings], SpeechSynthesizer]
-_PROVIDERS: dict[str, ProviderFactory] = {
-    "qwen": QwenTTSSynthesizer,
-    "openai": OpenAITTSSynthesizer,
-}
-
-
-def register_tts_provider(name: str, factory: ProviderFactory) -> None:
-    """Register an adapter, for example at application startup or in a plugin."""
-    normalized_name = name.strip().lower()
-    if not normalized_name:
-        raise ValueError("TTS provider name must not be empty")
-    _PROVIDERS[normalized_name] = factory
-    get_tts_synthesizer.cache_clear()
+    @property
+    def model_name(self) -> str:
+        return self._settings.tts_openai_model
 
 
 @lru_cache
 def get_tts_synthesizer() -> SpeechSynthesizer:
-    settings = get_settings()
-    provider_name = settings.tts_provider.strip().lower()
-    try:
-        factory = _PROVIDERS[provider_name]
-    except KeyError as error:
-        available = ", ".join(sorted(_PROVIDERS))
-        raise TTSError(f"Unknown TTS provider '{provider_name}'. Available: {available}") from error
-    return factory(settings)
-
-
-def _load_qwen_model(settings: Settings) -> QwenModel:
-    try:
-        import torch
-        from qwen_tts import Qwen3TTSModel
-    except ImportError as error:  # pragma: no cover - environment setup branch
-        raise TTSError("Qwen TTS dependencies are not installed") from error
-
-    dtype = torch.bfloat16 if settings.tts_device == "cuda" else torch.float32
-    return Qwen3TTSModel.from_pretrained(
-        settings.tts_model,
-        device_map=settings.tts_device,
-        dtype=dtype,
-    )
-
-
-def _encode_wav(waveform: Any, sample_rate: int) -> bytes:
-    try:
-        import soundfile as sf
-    except ImportError as error:  # pragma: no cover - supplied by qwen-tts
-        raise TTSError("soundfile is required to encode TTS audio") from error
-
-    output = io.BytesIO()
-    sf.write(output, waveform, sample_rate, format="WAV")
-    return output.getvalue()
+    """Return the one supported synthesizer for this deployment."""
+    return OpenAITTSSynthesizer(get_settings())
 
 
 def _wav_sample_rate(content: bytes) -> int:

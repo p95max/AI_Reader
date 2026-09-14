@@ -28,6 +28,8 @@ class AudioChunkStore(Protocol):
         chunk: GeneratedAudioChunk,
         *,
         voice: str,
+        tts_provider: str | None,
+        tts_model: str | None,
         attempt_count: int,
         generation_time_milliseconds: int,
         tts_cost_usd: float,
@@ -41,6 +43,8 @@ class AudioChunkStore(Protocol):
         narration: str,
         storage_key: str,
         voice: str,
+        tts_provider: str | None,
+        tts_model: str | None,
         attempt_count: int,
         error_message: str,
     ) -> None: ...
@@ -70,6 +74,8 @@ class SQLAlchemyAudioChunkStore:
                 storage_key=chunk.storage_key,
                 content_type=chunk.content_type,
                 duration_milliseconds=chunk.duration_milliseconds,
+                tts_provider=chunk.tts_provider,
+                tts_model=chunk.tts_model,
             )
             for chunk in chunks
         ]
@@ -105,6 +111,8 @@ class SQLAlchemyAudioChunkStore:
         chunk: GeneratedAudioChunk,
         *,
         voice: str,
+        tts_provider: str | None,
+        tts_model: str | None,
         attempt_count: int,
         generation_time_milliseconds: int,
         tts_cost_usd: float,
@@ -122,6 +130,8 @@ class SQLAlchemyAudioChunkStore:
                         duration_milliseconds=chunk.duration_milliseconds,
                         status=AudioChunkStatus.READY,
                         voice=voice,
+                        tts_provider=tts_provider,
+                        tts_model=tts_model,
                         attempt_count=attempt_count,
                         generation_time_milliseconds=generation_time_milliseconds,
                         tts_cost_usd=tts_cost_usd,
@@ -134,6 +144,8 @@ class SQLAlchemyAudioChunkStore:
                 record.duration_milliseconds = chunk.duration_milliseconds
                 record.status = AudioChunkStatus.READY
                 record.voice = voice
+                record.tts_provider = tts_provider
+                record.tts_model = tts_model
                 record.attempt_count = attempt_count
                 record.generation_time_milliseconds = generation_time_milliseconds
                 record.tts_cost_usd = tts_cost_usd
@@ -148,6 +160,8 @@ class SQLAlchemyAudioChunkStore:
         narration: str,
         storage_key: str,
         voice: str,
+        tts_provider: str | None,
+        tts_model: str | None,
         attempt_count: int,
         error_message: str,
     ) -> None:
@@ -164,6 +178,8 @@ class SQLAlchemyAudioChunkStore:
                         duration_milliseconds=0,
                         status=AudioChunkStatus.FAILED,
                         voice=voice,
+                        tts_provider=tts_provider,
+                        tts_model=tts_model,
                         attempt_count=attempt_count,
                         error_message=error_message[:2_000],
                     )
@@ -171,6 +187,8 @@ class SQLAlchemyAudioChunkStore:
             else:
                 record.status = AudioChunkStatus.FAILED
                 record.voice = voice
+                record.tts_provider = tts_provider
+                record.tts_model = tts_model
                 record.attempt_count = attempt_count
                 record.error_message = error_message[:2_000]
             await session.commit()

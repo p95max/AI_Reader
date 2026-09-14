@@ -65,7 +65,7 @@ class BookCostRead(BaseModel):
 
 
 class NarrationPreferences(BaseModel):
-    voice: str = Field(default="Ryan", min_length=1, max_length=100)
+    voice: str = Field(default="alloy", min_length=1, max_length=100)
     speed: SpeechSpeed = SpeechSpeed.NORMAL
     style: ReadingStyle = ReadingStyle.NEUTRAL
     code_mode: CodeMode = CodeMode.HYBRID

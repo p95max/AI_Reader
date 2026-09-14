@@ -12,11 +12,10 @@ class TTSUsageCost:
     generated_audio_milliseconds: int
     generation_time_milliseconds: int
     external_cost_usd: float
-    gpu_cost_usd: float
 
     @property
     def total_cost_usd(self) -> float:
-        return self.external_cost_usd + self.gpu_cost_usd
+        return self.external_cost_usd
 
 
 class TTSUsageCostCalculator:
@@ -39,14 +38,8 @@ class TTSUsageCostCalculator:
             * self._settings.tts_external_cost_per_audio_hour_usd
             / 3_600_000
         )
-        gpu_cost = 0.0
-        if self._settings.tts_device == "cuda":
-            gpu_cost = (
-                generation_time_milliseconds * self._settings.tts_gpu_cost_per_hour_usd / 3_600_000
-            )
         return TTSUsageCost(
             generated_audio_milliseconds=generated_audio_milliseconds,
             generation_time_milliseconds=generation_time_milliseconds,
             external_cost_usd=round(external_cost, 8),
-            gpu_cost_usd=round(gpu_cost, 8),
         )

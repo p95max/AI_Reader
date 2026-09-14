@@ -34,6 +34,8 @@ async def test_store_persists_measured_duration_and_object_key() -> None:
         storage_key="books/book/audio/000004.wav",
         content_type="audio/wav",
         duration_milliseconds=1_234,
+        tts_provider="openai",
+        tts_model="gpt-4o-mini-tts",
     )
 
     await store.save_many(UUID("12345678-1234-5678-1234-567812345678"), [chunk])
@@ -42,3 +44,5 @@ async def test_store_persists_measured_duration_and_object_key() -> None:
     record = session.records[0]
     assert record.duration_milliseconds == 1_234
     assert record.storage_key == "books/book/audio/000004.wav"
+    assert record.tts_provider == "openai"
+    assert record.tts_model == "gpt-4o-mini-tts"

@@ -25,20 +25,6 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
 ]
 
-[project.optional-dependencies]
-# Keep the web/API image free of PyTorch. The dedicated TTS worker selects one
-# of these mutually exclusive variants at build time.
-tts-cpu = [
-    "qwen-tts>=0.1.1",
-    "torch",
-    "torchaudio",
-]
-tts-gpu = [
-    "qwen-tts>=0.1.1",
-    "torch",
-    "torchaudio",
-]
-
 [dependency-groups]
 dev = [
     "httpx>=0.27.0",
@@ -53,34 +39,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
-[tool.uv]
-conflicts = [
-    [
-        { extra = "tts-cpu" },
-        { extra = "tts-gpu" },
-    ],
-]
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu", extra = "tts-cpu" },
-    { index = "pytorch-cu128", extra = "tts-gpu" },
-]
-torchaudio = [
-    { index = "pytorch-cpu", extra = "tts-cpu" },
-    { index = "pytorch-cu128", extra = "tts-gpu" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

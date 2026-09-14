@@ -24,11 +24,3 @@ COPY alembic.ini ./
 
 FROM base AS api
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-FROM base AS tts-cpu
-RUN uv sync --frozen --no-dev --extra tts-cpu --no-install-project
-CMD ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "tts", "--loglevel=INFO"]
-
-FROM base AS tts-gpu
-RUN uv sync --frozen --no-dev --extra tts-gpu --no-install-project
-CMD ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "tts", "--loglevel=INFO"]
