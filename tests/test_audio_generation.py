@@ -1,4 +1,5 @@
 import io
+import struct
 import wave
 from uuid import UUID
 
@@ -84,3 +85,10 @@ def test_generator_saves_wav_and_duration_for_every_chunk() -> None:
 def test_wav_duration_rejects_invalid_content() -> None:
     with pytest.raises(ValueError, match="invalid WAV"):
         wav_duration_milliseconds(b"not-a-wav")
+
+
+def test_wav_duration_uses_available_bytes_when_data_header_is_invalid() -> None:
+    content = bytearray(wav_bytes(sample_rate=1_000, frames=1_500))
+    struct.pack_into("<I", content, 40, 2_147_483_647)
+
+    assert wav_duration_milliseconds(bytes(content)) == 1_500
