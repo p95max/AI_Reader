@@ -68,7 +68,7 @@ function shell(content) {
         <p class="sidebar-quote">“READ.<br>LISTEN.<br>LEARN ANYWHERE.”</p>
         <small class="version">v0.1.0</small>
       </aside>
-      <main class="app-shell">${content}</main>
+      <main class="app-shell"><div id="background-status" role="status" aria-live="polite" hidden></div>${content}</main>
       <nav class="mobile-navigation" aria-label="Mobile navigation">${navigation()}</nav>
     </div>
 `;
@@ -138,6 +138,7 @@ async function renderLibrary() {
       : '<a class="empty-library" href="/upload"><b>＋</b><span>Add your first book</span><small>PDF → audiobook</small></a>';
   };
   search.addEventListener("input", draw);
+  window.addEventListener("books-updated", (event) => { books = event.detail; draw(); });
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       activeFilter = button.dataset.filter;
@@ -467,10 +468,15 @@ async function renderBookPage() {
       const refreshedChunks = await audioResponse.json();
       const progress = await progressResponse.json();
       const hadNoAudio = chunks.length === 0;
+      const selectedId = chunks[currentChunk]?.id;
       chunks = refreshedChunks;
+      const restoredIndex = chunks.findIndex((chunk) => chunk.id === selectedId);
+      if (restoredIndex >= 0) currentChunk = restoredIndex;
       chapters = progress.chapters;
       drawChapterNavigation();
       setControlsEnabled(chunks.length > 0);
+      updateButtons();
+      if (chunks.length) chunkLabel.textContent = `Segment ${currentChunk + 1} of ${chunks.length}`;
 
       if (hadNoAudio && chunks.length) {
         statusMessage.classList.remove("player-processing-status");
@@ -533,7 +539,15 @@ async function renderBookPage() {
       selectedChapter = Number(button.dataset.chapterIndex);
       window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
       drawChapterNavigation();
+      playSelectedChapter();
     }));
+  };
+  const playSelectedChapter = () => {
+    const offset = chapters.slice(0, selectedChapter).reduce((total, chapter) => total + chapter.chunks.length, 0);
+    const end = offset + chapters[selectedChapter].chunks.length;
+    const index = chunks.findIndex((chunk) => chunk.chunk_index >= offset * 1000 && chunk.chunk_index < end * 1000);
+    if (index >= 0) selectChunk(index, !audio.paused);
+    else statusMessage.textContent = "Audio for this chapter is still being prepared.";
   };
   const selectChunk = async (index, shouldPlay = false, startAtMilliseconds = 0) => {
     if (index < 0 || index >= chunks.length) return;
@@ -565,12 +579,14 @@ async function renderBookPage() {
   next.addEventListener("click", () => selectChunk(currentChunk + 1, !audio.paused));
   previousChapter.addEventListener("click", () => {
     selectedChapter -= 1;
+    playSelectedChapter();
     window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
     drawChapterNavigation();
     loadUsage();
   });
   nextChapter.addEventListener("click", () => {
     selectedChapter += 1;
+    playSelectedChapter();
     window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
     drawChapterNavigation();
   });
@@ -676,6 +692,29 @@ async function renderPlayerLanding() {
     statusMessage.textContent = "Unable to open the player. Please try again later.";
   }
 }
+
+let monitorBusy = false;
+async function refreshGlobalProcessing() {
+  if (monitorBusy || document.hidden) return;
+  monitorBusy = true;
+  try {
+    const response = await fetch("/api/v1/books", { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error("Library unavailable");
+    const books = await response.json();
+    window.dispatchEvent(new CustomEvent("books-updated", { detail: books }));
+    const panel = document.querySelector("#background-status");
+    if (!panel) return;
+    const active = books.filter((book) => book.status === "processing");
+    panel.hidden = active.length === 0;
+    panel.innerHTML = active.map((book) => `<a href="/books/${encodeURIComponent(book.id)}">Processing in background · ${escapeHtml(book.title)} · ${Number(book.progress_percent).toFixed(0)}%<span class="processing-line" aria-hidden="true"><i></i></span></a>`).join("");
+  } catch (error) {
+    const panel = document.querySelector("#background-status");
+    if (panel) { panel.hidden = false; panel.textContent = "Processing status unavailable. Reconnecting…"; }
+  } finally { monitorBusy = false; }
+}
+window.setInterval(refreshGlobalProcessing, 7000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshGlobalProcessing(); });
+window.addEventListener("pageshow", refreshGlobalProcessing);
 
 if (window.location.pathname === "/library") {
   renderLibrary();

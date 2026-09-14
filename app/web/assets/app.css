@@ -5,6 +5,14 @@
   color: #e5fbff;
 }
 
+#background-status {
+  padding: 10px 20px;
+  border-bottom: 1px solid #15557a;
+  font-size: 13px;
+}
+#background-status a { display: block; color: #63d7ff; padding: 4px 0; }
+#background-status .processing-line { display: block; margin-top: 5px; }
+
 body {
   background: radial-gradient(circle at 70% -20%, #0b3159 0, transparent 37%), #020b17;
   margin: 0; min-height: 100vh; overflow-x: hidden;

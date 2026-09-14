@@ -152,6 +152,7 @@ class OpenAIAdapter:
         usage_reporter: UsageReporter | None = None,
     ) -> None:
         self._settings = settings or get_settings()
+        self._owns_client = client is None
         if client is None:
             api_key = self._settings.openai_api_key
             if api_key is None:
@@ -169,6 +170,13 @@ class OpenAIAdapter:
         self._usage_reporter = usage_reporter
 
     async def generate(self, request: AIRequest) -> AIResponse:
+        try:
+            return await self._generate(request)
+        finally:
+            if self._owns_client:
+                await self._client.close()
+
+    async def _generate(self, request: AIRequest) -> AIResponse:
         provider_response = await self._create_response(request)
         text = str(getattr(provider_response, "output_text", "")).strip()
         if not text:

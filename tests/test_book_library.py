@@ -3,6 +3,7 @@ from uuid import UUID
 import pytest
 
 from app.models.book import Book, BookStatus
+from app.schemas.books import BookLibraryItemRead
 from app.services.book_library import build_book_library_item
 
 
@@ -24,6 +25,8 @@ def test_library_item_calculates_progress_from_chunk_totals() -> None:
 
     assert item.progress_percent == 75.0
     assert item.author == "Unknown author"
+    response = BookLibraryItemRead.model_validate(item, from_attributes=True)
+    assert response.model_dump(mode="json")["progress_percent"] == 75.0
 
 
 def test_ready_book_without_chunks_is_complete() -> None:

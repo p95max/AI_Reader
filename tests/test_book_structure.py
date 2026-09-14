@@ -122,7 +122,7 @@ def test_builder_drops_empty_cover_headings_and_malformed_text() -> None:
     chapters = BookStructureBuilder().build(document)
 
     assert len(chapters) == 1
-    assert chapters[0].title == "HEART"
+    assert chapters[0].title == "THE TELL-TALE HEART"
     assert [chunk.source_text for chunk in chapters[0].chunks] == ["The first readable paragraph."]
 
 

@@ -108,7 +108,8 @@ async def list_books(
                 book,
                 total_chunks=counts.get(book.id, (0, 0))[0],
                 ready_chunks=counts.get(book.id, (0, 0))[1],
-            )
+            ),
+            from_attributes=True,
         )
         for book in books
     ]

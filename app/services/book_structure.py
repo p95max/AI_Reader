@@ -50,6 +50,18 @@ class BookStructureBuilder:
                 if self._is_page_number(block.text) or not self._is_usable_text(block.text):
                     continue
                 if block.is_heading:
+                    explicit_heading = re.match(
+                        r"^(?:chapter|part|section|глава|часть|раздел)\s+\S+",
+                        block.text.strip(), re.IGNORECASE,
+                    )
+                    # Cover typography is not a chapter boundary. Preserve all
+                    # cover title lines and any intervening content together.
+                    if (
+                        page.number == 1 and current is not None
+                        and current.start_page == 1 and not explicit_heading
+                    ):
+                        current.title = self._title(f"{current.title} {block.text}")
+                        continue
                     # Consecutive headings are typical of a cover page (title,
                     # subtitle, author). Keep only the last candidate until real
                     # content arrives, rather than producing empty chapters.
