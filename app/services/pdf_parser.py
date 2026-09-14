@@ -89,7 +89,16 @@ class PDFParser:
 
     heading_scale = 1.2
     code_pattern = re.compile(
-        r"(?:\b(?:def|class|return|import|if|else|for|while)\b|[{};]|=>|==|!=)"
+        r"^\s*(?:"
+        r"(?:async\s+)?def\s+\w+\s*\([^\n]*\)\s*:"
+        r"|class\s+\w+(?:\([^\n]*\))?\s*:"
+        r"|from\s+[\w.]+\s+import\s+\w+"
+        r"|import\s+[\w.]+\s*$"
+        r"|(?:const|let|var)\s+\w+\s*="
+        r"|(?:if|for|while)\s*\([^\n]*\)\s*\{"
+        r"|(?:if|for|while)\s+[^\n]+:\s*$"
+        r"|(?:public|private|static)\s+(?:static\s+)?\w+\s+\w+\s*\("
+        r")", re.MULTILINE,
     )
     formula_pattern = re.compile(r"[∑∫√≈≤≥±×÷]|\b[A-Za-z]\s*=\s*[^\n.]+[+*/^]")
 

@@ -45,6 +45,8 @@ class BookStructureBuilder:
 
         for page in document.pages:
             for block in page.text_blocks:
+                if page.number == 1 and block.text.strip().casefold() == "by":
+                    continue
                 # PDF extractors commonly emit footer page numbers as independent
                 # text blocks. They are not narratable content.
                 if self._is_page_number(block.text) or not self._is_usable_text(block.text):
