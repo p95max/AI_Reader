@@ -60,6 +60,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="AI_READER_",
+        extra="ignore",
     )
 
     def pricing_for_model(self, model: str | None = None) -> ModelPricing:
