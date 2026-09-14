@@ -1,8 +1,12 @@
+import io
+import wave
+
 import pytest
 
 from app.core.config import get_settings
 from app.services.resilient_tts import AudioChunkProcessingError
 from app.services.tts import (
+    OpenAITTSSynthesizer,
     QwenTTSSynthesizer,
     ReadingStyle,
     SpeechRequest,
@@ -20,6 +24,36 @@ class FakeQwenModel:
     def generate_custom_voice(self, text: str, speaker: str, **kwargs: object):
         self.calls.append({"text": text, "speaker": speaker, **kwargs})
         return [[0.0, 0.1, -0.1]], 24_000
+
+
+class FakeOpenAIResponse:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+
+class FakeOpenAISpeech:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> FakeOpenAIResponse:
+        self.calls.append(kwargs)
+        return FakeOpenAIResponse(self.content)
+
+
+class FakeOpenAIClient:
+    def __init__(self, content: bytes) -> None:
+        self.audio = type("Audio", (), {"speech": FakeOpenAISpeech(content)})()
+
+
+def wav_bytes(sample_rate: int = 24_000) -> bytes:
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"\x00\x00" * 16)
+    return output.getvalue()
 
 
 def test_qwen_is_loaded_lazily_and_uses_configured_voice() -> None:
@@ -42,6 +76,33 @@ def test_qwen_is_loaded_lazily_and_uses_configured_voice() -> None:
     assert loads == 1
     assert model.calls[0]["speaker"] == "Narrator"
     assert "обычный" in str(model.calls[0]["instruct"])
+
+
+def test_openai_tts_maps_existing_voice_and_returns_wav() -> None:
+    client = FakeOpenAIClient(wav_bytes())
+    settings = get_settings().model_copy(
+        update={"tts_openai_model": "gpt-4o-mini-tts", "tts_openai_slow_speed": 0.8}
+    )
+
+    result = OpenAITTSSynthesizer(settings, client=client).synthesize(
+        SpeechRequest(text="Тест", voice="Vivian", speed=SpeechSpeed.SLOW)
+    )
+
+    call = client.audio.speech.calls[0]
+    assert call["model"] == "gpt-4o-mini-tts"
+    assert call["voice"] == "nova"
+    assert call["speed"] == 0.8
+    assert call["response_format"] == "wav"
+    assert result.sample_rate == 24_000
+
+
+def test_openai_tts_rejects_unknown_voice_before_call() -> None:
+    client = FakeOpenAIClient(wav_bytes())
+    with pytest.raises(Exception, match="Unknown OpenAI TTS voice"):
+        OpenAITTSSynthesizer(get_settings(), client=client).synthesize(
+            SpeechRequest(text="Тест", voice="unsupported")
+        )
+    assert client.audio.speech.calls == []
 
 
 def test_slow_mode_changes_the_speech_instruction() -> None:

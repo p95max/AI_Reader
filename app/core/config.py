@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     tts_voice: str = "Ryan"
     tts_language: str = "Russian"
     tts_instruction: str = "Говори ясно, естественно и спокойно."
+    tts_openai_model: str = "gpt-4o-mini-tts"
+    tts_openai_voice: str = "alloy"
+    tts_openai_timeout_seconds: float = Field(default=60.0, gt=0)
+    tts_openai_normal_speed: float = Field(default=1.0, ge=0.25, le=4.0)
+    tts_openai_slow_speed: float = Field(default=0.85, ge=0.25, le=4.0)
     tts_external_cost_per_audio_hour_usd: float = Field(default=0.0, ge=0)
     tts_gpu_cost_per_hour_usd: float = Field(default=0.0, ge=0)
     tts_chunk_max_characters: int = Field(default=1_200, ge=100)
