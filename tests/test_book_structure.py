@@ -87,6 +87,23 @@ def test_builder_uses_one_fallback_chapter_when_pdf_has_no_headings() -> None:
     assert chapters[0].chunks[0].chunk_index == 0
 
 
+def test_builder_ignores_standalone_page_numbers() -> None:
+    document = ParsedDocument(
+        page_count=2,
+        pages=(
+            page(1, block(1, "1"), block(1, "First actual paragraph.")),
+            page(2, block(2, "Page 2"), block(2, "Second actual paragraph.")),
+        ),
+    )
+
+    chapters = BookStructureBuilder().build(document)
+
+    assert [chunk.source_text for chunk in chapters[0].chunks] == [
+        "First actual paragraph.",
+        "Second actual paragraph.",
+    ]
+
+
 class MemoryStore:
     def __init__(self) -> None:
         self.saved: tuple[UUID, object] | None = None

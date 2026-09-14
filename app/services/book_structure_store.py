@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.audio_chunk import AudioChunk
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.services.book_structure import StructuredChapter
 
@@ -31,6 +32,8 @@ class SQLAlchemyBookStructureStore:
     async def replace(self, book_id: UUID, chapters: tuple[StructuredChapter, ...]) -> None:
         async with self._session_factory() as session:
             chapter_ids = select(Chapter.id).where(Chapter.book_id == book_id)
+            # A fresh parse invalidates every earlier narration/audio segment.
+            await session.execute(delete(AudioChunk).where(AudioChunk.book_id == book_id))
             await session.execute(
                 delete(ContentChunk).where(ContentChunk.chapter_id.in_(chapter_ids))
             )

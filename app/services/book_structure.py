@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from app.services.pdf_parser import ParsedDocument, TextBlock
@@ -36,6 +37,7 @@ class BookStructureBuilder:
     """Uses parser-detected headings as chapter boundaries with a safe fallback."""
 
     fallback_title = "Начало документа"
+    _PAGE_NUMBER = re.compile(r"^\s*(?:page\s+)?\d{1,4}\s*$", re.IGNORECASE)
 
     def build(self, document: ParsedDocument) -> tuple[StructuredChapter, ...]:
         pending: list[_PendingChapter] = []
@@ -43,6 +45,10 @@ class BookStructureBuilder:
 
         for page in document.pages:
             for block in page.text_blocks:
+                # PDF extractors commonly emit footer page numbers as independent
+                # text blocks. They are not narratable content.
+                if self._is_page_number(block.text):
+                    continue
                 if block.is_heading:
                     if current is not None:
                         pending.append(current)
@@ -89,3 +95,7 @@ class BookStructureBuilder:
     @staticmethod
     def _title(text: str) -> str:
         return " ".join(text.split())[:500] or BookStructureBuilder.fallback_title
+
+    @classmethod
+    def _is_page_number(cls, text: str) -> bool:
+        return bool(cls._PAGE_NUMBER.fullmatch(text))
