@@ -59,9 +59,11 @@ def make_settings(**overrides: object) -> Settings:
         "ai_input_cost_per_million_tokens": 2.0,
         "ai_cached_input_cost_per_million_tokens": 0.5,
         "ai_output_cost_per_million_tokens": 4.0,
+        "ai_pricing_version": "default",
+        "ai_model_price_list": {},
     }
     values.update(overrides)
-    return Settings(**values)
+    return Settings(_env_file=None, **values)
 
 
 def provider_response(text: str = "Narration") -> SimpleNamespace:

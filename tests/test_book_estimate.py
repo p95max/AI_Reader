@@ -24,6 +24,10 @@ def test_estimate_uses_configured_token_pricing() -> None:
 def test_estimate_uses_versioned_model_price_list() -> None:
     settings = Settings(
         ai_model="gpt-costed",
+        ai_input_cost_per_million_tokens=0,
+        ai_cached_input_cost_per_million_tokens=0,
+        ai_output_cost_per_million_tokens=0,
+        ai_pricing_version="default",
         ai_model_price_list={
             "gpt-costed": {
                 "input_per_million_tokens": 2.0,

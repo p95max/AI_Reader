@@ -402,7 +402,15 @@ async def delete_book(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
 
     try:
-        await run_in_threadpool(storage.delete_file, book.storage_key)
+        audio_storage_keys = tuple(
+            (
+                await session.scalars(
+                    select(AudioChunk.storage_key).where(AudioChunk.book_id == book_id)
+                )
+            ).all()
+        )
+        for storage_key in (book.storage_key, *audio_storage_keys):
+            await run_in_threadpool(storage.delete_file, storage_key)
     except ObjectStorageError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 

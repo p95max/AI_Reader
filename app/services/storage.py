@@ -79,7 +79,7 @@ class S3Storage:
         try:
             self.client.delete_object(Bucket=self.bucket_name, Key=key)
         except (ClientError, BotoCoreError) as error:
-            raise ObjectStorageError("Unable to delete the uploaded PDF") from error
+            raise ObjectStorageError("Unable to delete the stored file") from error
 
     def download_file(self, key: str, destination: Path) -> None:
         try:

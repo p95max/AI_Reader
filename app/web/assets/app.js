@@ -94,7 +94,8 @@ function renderBookCard(book) {
   const initial = title.slice(0, 1).toUpperCase() || "A";
   const progress = Math.max(0, Math.min(100, Number(book.progress_percent) || 0));
   return `
-    <a class="book-card" href="/books/${encodeURIComponent(book.id)}">
+    <article class="book-card">
+    <a class="book-card__link" href="/books/${encodeURIComponent(book.id)}">
       <span class="book-cover book-cover--${coverVariant(book.title)}" aria-hidden="true"><b>${initial}</b><i></i></span>
       <span class="book-card__body">
         <span class="book-card__status status--${escapeHtml(book.status)}">${statusLabel(book.status)}</span>
@@ -103,6 +104,8 @@ function renderBookCard(book) {
         <span class="book-card__meta">◖ ${progress}% complete <b>•••</b></span>
       </span>
     </a>
+    <button type="button" class="delete-book" data-delete-book="${encodeURIComponent(book.id)}" aria-label="Delete ${title}" title="Delete book">×</button>
+    </article>
   `;
 }
 
@@ -136,6 +139,24 @@ async function renderLibrary() {
     list.innerHTML = visible.length
       ? visible.map(renderBookCard).join("")
       : '<a class="empty-library" href="/upload"><b>＋</b><span>Add your first book</span><small>PDF → audiobook</small></a>';
+    list.querySelectorAll("[data-delete-book]").forEach((button) => button.addEventListener("click", async () => {
+      const bookId = decodeURIComponent(button.dataset.deleteBook);
+      const book = books.find((item) => item.id === bookId);
+      if (!book || !window.confirm(`Delete “${book.title}” and all of its audio? This cannot be undone.`)) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("Unable to delete book");
+        books = books.filter((item) => item.id !== bookId);
+        if (window.localStorage.getItem("ai-reader:last-book-id") === bookId) {
+          window.localStorage.removeItem("ai-reader:last-book-id");
+        }
+        draw();
+      } catch (error) {
+        button.disabled = false;
+        window.alert("Unable to delete this book. Please try again.");
+      }
+    }));
   };
   search.addEventListener("input", draw);
   window.addEventListener("books-updated", (event) => { books = event.detail; draw(); });
@@ -357,7 +378,7 @@ async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
     <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div></div>
-    <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></section>
+    <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section>
     <details class="usage-panel" id="usage-panel" open><summary><span><h2>USAGE &amp; COST</h2><small>Live processing totals</small></span><b aria-hidden="true">⌄</b></summary><div class="usage-grid"><article class="usage-card"><span>AI TOKENS</span><b id="usage-tokens">—</b><small id="usage-token-detail">Input / output</small></article><article class="usage-card"><span>AI COST</span><b id="usage-ai-cost">—</b><small id="usage-ai-requests">LLM requests</small></article><article class="usage-card"><span>GENERATED AUDIO</span><b id="usage-audio-duration">—</b><small id="usage-generation-time">Generation time</small></article><article class="usage-card"><span>TTS COST</span><b id="usage-tts-cost">—</b><small>Generated audio and GPU</small></article><article class="usage-card usage-card--total"><span>TOTAL COST</span><b id="usage-total-cost">—</b><small>AI adaptation + TTS</small></article></div><p id="usage-note">Loading usage data…</p></details>
     <section class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></section>
     </section>
@@ -378,6 +399,8 @@ async function renderBookPage() {
   const previous = document.querySelector("#previous-chunk");
   const next = document.querySelector("#next-chunk");
   const speed = document.querySelector("#playback-speed");
+  const volume = document.querySelector("#player-volume");
+  const volumeValue = document.querySelector("#volume-value");
   const skipButtons = [...document.querySelectorAll("[data-skip]")];
   const chapterSummary = document.querySelector("#chapter-summary");
   const chapterList = document.querySelector("#chapter-list");
@@ -402,6 +425,19 @@ async function renderBookPage() {
   let lastPersistedAt = 0;
   let audioRetryAttempts = 0;
   let backgroundRefreshTimer = null;
+
+  const savedVolume = Number(window.localStorage.getItem("ai-reader:volume"));
+  const initialVolume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1
+    ? savedVolume
+    : 1;
+  const setVolume = (value) => {
+    const normalized = Math.max(0, Math.min(1, Number(value) || 0));
+    audio.volume = normalized;
+    volume.value = String(normalized);
+    volumeValue.textContent = `${Math.round(normalized * 100)}%`;
+    window.localStorage.setItem("ai-reader:volume", String(normalized));
+  };
+  setVolume(initialVolume);
 
   if (window.matchMedia("(max-width: 850px)").matches) usagePanel.open = false;
 
@@ -594,6 +630,7 @@ async function renderBookPage() {
     audio.currentTime = Math.max(0, Math.min(duration(), audio.currentTime + Number(button.dataset.skip)));
   }));
   speed.addEventListener("change", () => { audio.playbackRate = Number(speed.value); });
+  volume.addEventListener("input", () => setVolume(volume.value));
   seek.addEventListener("input", () => { audio.currentTime = Number(seek.value); updateTimeline(); });
   seek.addEventListener("change", () => { persistPlayback({ force: true }); });
   audio.addEventListener("loadedmetadata", () => {
