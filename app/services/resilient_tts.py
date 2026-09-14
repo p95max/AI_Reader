@@ -46,10 +46,12 @@ class ResilientTTSProcessor:
         speed: SpeechSpeed,
         attempt_count: int,
         style: ReadingStyle = ReadingStyle.NEUTRAL,
+        start_chunk_index: int = 0,
     ) -> list[GeneratedAudioChunk]:
         await self._store.ensure_voice(book_id, voice)
         generated: list[GeneratedAudioChunk] = []
-        for chunk_index, text in enumerate(self._generator.split_narration(narration)):
+        for offset, text in enumerate(self._generator.split_narration(narration)):
+            chunk_index = start_chunk_index + offset
             if await self._store.is_ready(book_id, chunk_index):
                 logger.info(
                     "tts_chunk_skipped_ready", extra={"book_id": str(book_id), "chunk": chunk_index}
