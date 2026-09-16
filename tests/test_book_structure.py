@@ -83,7 +83,7 @@ def test_builder_uses_one_fallback_chapter_when_pdf_has_no_headings() -> None:
 
     chapters = BookStructureBuilder().build(document)
 
-    assert chapters[0].title == "Начало документа"
+    assert chapters[0].title == "Start of document"
     assert chapters[0].chunks[0].chunk_index == 0
 
 
@@ -124,6 +124,36 @@ def test_builder_drops_empty_cover_headings_and_malformed_text() -> None:
     assert len(chapters) == 1
     assert chapters[0].title == "THE TELL-TALE HEART"
     assert [chunk.source_text for chunk in chapters[0].chunks] == ["The first readable paragraph."]
+
+
+def test_builder_splits_a_long_document_with_only_a_cover_title_into_sections() -> None:
+    document = ParsedDocument(
+        page_count=5,
+        pages=tuple(
+            page(
+                number,
+                *(
+                    (block(number, "A LONG DOCUMENT", heading=True),)
+                    if number == 1
+                    else ()
+                ),
+                block(number, f"Readable text on page {number}."),
+            )
+            for number in range(1, 6)
+        ),
+    )
+
+    chapters = BookStructureBuilder().build(document)
+
+    assert [(chapter.title, chapter.start_page, chapter.end_page) for chapter in chapters] == [
+        ("Section 1", 1, 2),
+        ("Section 2", 3, 4),
+        ("Section 3", 5, 5),
+    ]
+    assert [chunk.source_text for chunk in chapters[1].chunks] == [
+        "Readable text on page 3.",
+        "Readable text on page 4.",
+    ]
 
 
 class MemoryStore:

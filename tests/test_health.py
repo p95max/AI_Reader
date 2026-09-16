@@ -36,6 +36,8 @@ def test_frontend_assets_are_served() -> None:
     assert 'id="mini-player-seek"' in response.text
     assert 'id="mini-player-previous"' in response.text
     assert 'id="mini-player-open"' in response.text
+    assert 'id="chapter-navigation"' in response.text
+    assert 'id="open-chapters"' in response.text
     assert '["/player", "player", "Player"]' not in response.text
 
 

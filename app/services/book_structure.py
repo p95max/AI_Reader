@@ -36,7 +36,12 @@ class _PendingChapter:
 class BookStructureBuilder:
     """Uses parser-detected headings as chapter boundaries with a safe fallback."""
 
-    fallback_title = "Начало документа"
+    fallback_title = "Start of document"
+    # A title page often looks like a heading to PDF extractors.  When that is
+    # the only detected "chapter" in a longer document, keep playback useful
+    # by exposing compact, page-based sections rather than one giant item.
+    fallback_section_minimum_pages = 4
+    fallback_section_page_span = 2
     _PAGE_NUMBER = re.compile(r"^\s*(?:page\s+)?\d{1,4}\s*$", re.IGNORECASE)
 
     def build(self, document: ParsedDocument) -> tuple[StructuredChapter, ...]:
@@ -90,6 +95,9 @@ class BookStructureBuilder:
         if current is not None and current.blocks:
             pending.append(current)
 
+        if len(pending) == 1:
+            pending = self._split_long_single_section(pending[0])
+
         return tuple(
             StructuredChapter(
                 chapter_index=chapter_index,
@@ -108,6 +116,49 @@ class BookStructureBuilder:
             )
             for chapter_index, chapter in enumerate(pending)
         )
+
+    def _split_long_single_section(self, chapter: _PendingChapter) -> list[_PendingChapter]:
+        page_count = chapter.end_page - chapter.start_page + 1
+        if page_count < self.fallback_section_minimum_pages:
+            return [chapter]
+
+        sections: list[_PendingChapter] = []
+        start_page = chapter.start_page
+        end_page = min(
+            start_page + self.fallback_section_page_span - 1,
+            chapter.end_page,
+        )
+        blocks: list[TextBlock] = []
+
+        for block in chapter.blocks:
+            while block.page_number > end_page:
+                if blocks:
+                    sections.append(
+                        _PendingChapter(
+                            title=f"Section {len(sections) + 1}",
+                            start_page=start_page,
+                            end_page=end_page,
+                            blocks=blocks,
+                        )
+                    )
+                start_page = end_page + 1
+                end_page = min(
+                    start_page + self.fallback_section_page_span - 1,
+                    chapter.end_page,
+                )
+                blocks = []
+            blocks.append(block)
+
+        if blocks:
+            sections.append(
+                _PendingChapter(
+                    title=f"Section {len(sections) + 1}",
+                    start_page=start_page,
+                    end_page=chapter.end_page,
+                    blocks=blocks,
+                )
+            )
+        return sections or [chapter]
 
     @staticmethod
     def _title(text: str) -> str:

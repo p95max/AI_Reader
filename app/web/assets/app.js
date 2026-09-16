@@ -546,10 +546,10 @@ function formatPlaybackTime(seconds) {
 async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div></div>
-    <section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div>
+    <div class="player-workspace"><div class="player-main"><section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section></div>
+    <div id="chapters-backdrop" class="chapters-backdrop" hidden></div><aside id="chapter-navigation" class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button><button type="button" id="close-chapters" class="close-chapters" aria-label="Close chapters">×</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></aside></div>
     <details class="usage-panel" id="usage-panel" open><summary><span><h2>USAGE &amp; COST</h2><small>Live processing totals</small></span><b aria-hidden="true">⌄</b></summary><div class="usage-grid"><article class="usage-card"><span>AI TOKENS</span><b id="usage-tokens">—</b><small id="usage-token-detail">Input / output</small></article><article class="usage-card"><span>AI COST</span><b id="usage-ai-cost">—</b><small id="usage-ai-requests">LLM requests</small></article><article class="usage-card"><span>GENERATED AUDIO</span><b id="usage-audio-duration">—</b><small id="usage-generation-time">Generation time</small></article><article class="usage-card"><span>TTS COST</span><b id="usage-tts-cost">—</b><small>Generated audio and GPU</small></article><article class="usage-card usage-card--total"><span>TOTAL COST</span><b id="usage-total-cost">—</b><small>AI adaptation + TTS</small></article></div><p id="usage-note">Loading usage data…</p></details>
-    <section class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></section>
     </section>
   `);
 
@@ -573,6 +573,10 @@ async function renderBookPage() {
   const skipButtons = [...document.querySelectorAll("[data-skip]")];
   const chapterSummary = document.querySelector("#chapter-summary");
   const chapterList = document.querySelector("#chapter-list");
+  const chapterNavigation = document.querySelector("#chapter-navigation");
+  const openChapters = document.querySelector("#open-chapters");
+  const closeChapters = document.querySelector("#close-chapters");
+  const chaptersBackdrop = document.querySelector("#chapters-backdrop");
   const previousChapter = document.querySelector("#previous-chapter");
   const nextChapter = document.querySelector("#next-chapter");
   const nextAvailableChunk = document.querySelector("#next-available-chunk");
@@ -607,6 +611,12 @@ async function renderBookPage() {
     window.localStorage.setItem("ai-reader:volume", String(normalized));
   };
   setVolume(initialVolume);
+
+  const setChapterSheetOpen = (open) => {
+    chapterNavigation.classList.toggle("is-open", open);
+    chaptersBackdrop.hidden = !open;
+    openChapters.setAttribute("aria-expanded", String(open));
+  };
 
   if (window.matchMedia("(max-width: 850px)").matches) usagePanel.open = false;
 
@@ -677,7 +687,7 @@ async function renderBookPage() {
       chunks = refreshedChunks;
       const restoredIndex = chunks.findIndex((chunk) => chunk.id === selectedId);
       if (restoredIndex >= 0) currentChunk = restoredIndex;
-      chapters = progress.chapters;
+      chapters = makeNavigableSections(progress.chapters);
       drawChapterNavigation();
       setControlsEnabled(chunks.length > 0);
       updateButtons();
@@ -719,6 +729,36 @@ async function renderBookPage() {
       if (!keepalive) statusMessage.textContent = "Playback is active, but the position could not be saved.";
     }
   };
+  const makeNavigableSections = (sourceChapters) => {
+    if (sourceChapters.length !== 1) return sourceChapters;
+    const [chapter] = sourceChapters;
+    const pageCount = chapter.end_page - chapter.start_page + 1;
+    if (pageCount < 4 || chapter.chunks.length < 2) return sourceChapters;
+
+    const sections = [];
+    const pagesPerSection = 2;
+    for (let startPage = chapter.start_page; startPage <= chapter.end_page; startPage += pagesPerSection) {
+      const endPage = Math.min(startPage + pagesPerSection - 1, chapter.end_page);
+      const sectionChunks = chapter.chunks.filter((chunk) => chunk.page_number >= startPage && chunk.page_number <= endPage);
+      if (!sectionChunks.length) continue;
+      const readyChunks = sectionChunks.filter((chunk) => chunk.status === "ready").length;
+      const status = sectionChunks.some((chunk) => chunk.status === "failed") ? "failed"
+        : sectionChunks.some((chunk) => chunk.status === "processing") ? "processing"
+        : readyChunks === sectionChunks.length ? "ready" : "queued";
+      sections.push({
+        ...chapter,
+        chapter_index: sections.length,
+        title: `Section ${sections.length + 1}`,
+        start_page: startPage,
+        end_page: endPage,
+        chunks: sectionChunks,
+        total_chunks: sectionChunks.length,
+        ready_chunks: readyChunks,
+        status,
+      });
+    }
+    return sections.length > 1 ? sections : sourceChapters;
+  };
   const drawChapterNavigation = () => {
     if (!chapters.length) {
       chapterSummary.textContent = "Book structure is still being prepared.";
@@ -730,13 +770,13 @@ async function renderBookPage() {
     }
     selectedChapter = Math.min(selectedChapter, chapters.length - 1);
     const selected = chapters[selectedChapter];
-    chapterSummary.textContent = `Viewing Chapter ${selected.chapter_index + 1} · pages ${selected.start_page}–${selected.end_page} · ${selected.ready_chunks}/${selected.total_chunks} chunks ready`;
+    chapterSummary.textContent = `Viewing section ${selected.chapter_index + 1} · pages ${selected.start_page}–${selected.end_page} · ${selected.ready_chunks}/${selected.total_chunks} chunks ready`;
     chapterList.innerHTML = chapters.map((chapter, index) => `
-      <li><button type="button" class="chapter-item${index === selectedChapter ? " is-selected" : ""}" data-chapter-index="${index}" aria-current="${index === selectedChapter ? "true" : "false"}"><span><b>CH ${String(chapter.chapter_index + 1).padStart(2, "0")}</b><strong>${escapeHtml(chapter.title)}</strong></span><small class="status--${escapeHtml(chapter.status)}">${statusLabel(chapter.status)} · ${chapter.ready_chunks}/${chapter.total_chunks}</small></button></li>
+      <li><button type="button" class="chapter-item${index === selectedChapter ? " is-selected" : ""}" data-chapter-index="${index}" aria-current="${index === selectedChapter ? "true" : "false"}"${chapter.ready_chunks ? "" : " disabled"} title="${chapter.ready_chunks ? "Play this section" : `This section is ${statusLabel(chapter.status).toLowerCase()}`} "><span><b>SEC ${String(chapter.chapter_index + 1).padStart(2, "0")}</b><strong>${escapeHtml(chapter.title)}</strong></span><small class="status--${escapeHtml(chapter.status)}">${statusLabel(chapter.status)} · ${chapter.ready_chunks}/${chapter.total_chunks}</small></button></li>
     `).join("");
     const nextReady = chapters.flatMap((chapter) => chapter.chunks.map((chunk) => ({ chapter, chunk }))).find(({ chunk }) => chunk.status === "ready");
     nextAvailableChunk.textContent = nextReady
-      ? `Next available chunk: Chapter ${nextReady.chapter.chapter_index + 1}, segment ${nextReady.chunk.chunk_index + 1}.`
+      ? `Next available chunk: Section ${nextReady.chapter.chapter_index + 1}, segment ${nextReady.chunk.chunk_index + 1}.`
       : "The next available chunk is still being generated.";
     previousChapter.disabled = selectedChapter === 0;
     nextChapter.disabled = selectedChapter === chapters.length - 1;
@@ -745,14 +785,26 @@ async function renderBookPage() {
       window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
       drawChapterNavigation();
       playSelectedChapter();
+      setChapterSheetOpen(false);
     }));
+  };
+  const chapterIndexForAudioChunk = (chunk) => {
+    if (!chunk) return -1;
+    let sourceOffset = 0;
+    return chapters.findIndex((chapter) => {
+      const start = sourceOffset * 1000;
+      sourceOffset += chapter.chunks.length;
+      const end = sourceOffset * 1000;
+      const found = chunk.chunk_index >= start && chunk.chunk_index < end;
+      return found;
+    });
   };
   const playSelectedChapter = () => {
     const offset = chapters.slice(0, selectedChapter).reduce((total, chapter) => total + chapter.chunks.length, 0);
     const end = offset + chapters[selectedChapter].chunks.length;
     const index = chunks.findIndex((chunk) => chunk.chunk_index >= offset * 1000 && chunk.chunk_index < end * 1000);
     if (index >= 0) selectChunk(index, !audio.paused);
-    else statusMessage.textContent = "Audio for this chapter is still being prepared.";
+    else statusMessage.textContent = "Audio for this section is still being prepared.";
   };
   const selectChunk = async (index, shouldPlay = false, startAtMilliseconds = 0) => {
     if (index < 0 || index >= chunks.length) return;
@@ -766,6 +818,12 @@ async function renderBookPage() {
     audio.load();
     chunkLabel.textContent = `Segment ${currentChunk + 1} of ${chunks.length}`;
     statusMessage.textContent = "Ready to play";
+    const chapterIndex = chapterIndexForAudioChunk(chunk);
+    if (chapterIndex >= 0 && chapterIndex !== selectedChapter) {
+      selectedChapter = chapterIndex;
+      window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
+      drawChapterNavigation();
+    }
     updateTimeline();
     updateButtons();
     if (shouldPlay) {
@@ -780,20 +838,22 @@ async function renderBookPage() {
       audio.pause();
     }
   });
+  openChapters.addEventListener("click", () => setChapterSheetOpen(true));
+  closeChapters.addEventListener("click", () => setChapterSheetOpen(false));
+  chaptersBackdrop.addEventListener("click", () => setChapterSheetOpen(false));
   previous.addEventListener("click", () => selectChunk(currentChunk - 1, !audio.paused));
   next.addEventListener("click", () => selectChunk(currentChunk + 1, !audio.paused));
   previousChapter.addEventListener("click", () => {
     selectedChapter -= 1;
-    playSelectedChapter();
     window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
     drawChapterNavigation();
-    loadUsage();
+    if (chapters[selectedChapter]?.ready_chunks) playSelectedChapter();
   });
   nextChapter.addEventListener("click", () => {
     selectedChapter += 1;
-    playSelectedChapter();
     window.history.replaceState({}, "", `${window.location.pathname}?chapter=${selectedChapter}`);
     drawChapterNavigation();
+    if (chapters[selectedChapter]?.ready_chunks) playSelectedChapter();
   });
   skipButtons.forEach((button) => button.addEventListener("click", () => {
     audio.currentTime = Math.max(0, Math.min(duration(), audio.currentTime + Number(button.dataset.skip)));
@@ -846,7 +906,7 @@ async function renderBookPage() {
     chunks = await audioResponse.json();
     const progress = await progressResponse.json();
     const playback = await playbackResponse.json();
-    chapters = progress.chapters;
+    chapters = makeNavigableSections(progress.chapters);
     title.textContent = book.title;
     author.textContent = book.author;
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
