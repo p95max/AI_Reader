@@ -49,9 +49,7 @@ class BookStructureBuilder:
     _PAGE_NUMBER = re.compile(r"^\s*(?:page\s+)?\d{1,4}\s*$", re.IGNORECASE)
     _GUTENBERG_START = re.compile(r"\*{3}\s*START OF THE PROJECT GUTENBERG EBOOK", re.I)
     _GUTENBERG_END = re.compile(r"\*{3}\s*END OF THE PROJECT GUTENBERG EBOOK", re.I)
-    _NUMBERED_CHAPTER = re.compile(
-        r"^\s*(?:chapter|глава)\s+(?:\d+|[ivxlcdm]+)\b", re.IGNORECASE
-    )
+    _NUMBERED_CHAPTER = re.compile(r"^\s*chapter\s+(?:\d+|[ivxlcdm]+)\b", re.IGNORECASE)
     _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
 
     def build(self, document: ParsedDocument) -> tuple[StructuredChapter, ...]:
@@ -69,14 +67,17 @@ class BookStructureBuilder:
                     continue
                 if block.is_heading:
                     explicit_heading = re.match(
-                        r"^(?:chapter|part|section|глава|часть|раздел)\s+\S+",
-                        block.text.strip(), re.IGNORECASE,
+                        r"^(?:chapter|part|section)\s+\S+",
+                        block.text.strip(),
+                        re.IGNORECASE,
                     )
                     # Cover typography is not a chapter boundary. Preserve all
                     # cover title lines and any intervening content together.
                     if (
-                        page.number == 1 and current is not None
-                        and current.start_page == 1 and not explicit_heading
+                        page.number == 1
+                        and current is not None
+                        and current.start_page == 1
+                        and not explicit_heading
                     ):
                         current.title = self._title(f"{current.title} {block.text}")
                         continue
@@ -204,9 +205,7 @@ class BookStructureBuilder:
                 return (first_page, *pages[page_index + 1 :])
         return tuple(pages)
 
-    def _narration_chunks(
-        self, blocks: list[TextBlock]
-    ) -> tuple[StructuredContentChunk, ...]:
+    def _narration_chunks(self, blocks: list[TextBlock]) -> tuple[StructuredContentChunk, ...]:
         """Batch adjacent prose blocks from one page into cost-efficient AI requests."""
         chunks: list[StructuredContentChunk] = []
         prose: list[str] = []

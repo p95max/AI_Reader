@@ -39,18 +39,18 @@ def test_builder_creates_chapters_and_ordered_content_chunks() -> None:
     document = ParsedDocument(
         page_count=2,
         pages=(
-            page(1, block(1, "Глава 1", heading=True), block(1, "Первый текст.")),
-            page(2, block(2, "Глава 2", heading=True), block(2, "print('code')", code=True)),
+            page(1, block(1, "Chapter 1", heading=True), block(1, "First text.")),
+            page(2, block(2, "Chapter 2", heading=True), block(2, "print('code')", code=True)),
         ),
     )
 
     chapters = BookStructureBuilder().build(document)
 
     assert [(chapter.title, chapter.start_page, chapter.end_page) for chapter in chapters] == [
-        ("Глава 1", 1, 1),
-        ("Глава 2", 2, 2),
+        ("Chapter 1", 1, 1),
+        ("Chapter 2", 2, 2),
     ]
-    assert chapters[0].chunks[0].source_text == "Первый текст."
+    assert chapters[0].chunks[0].source_text == "First text."
     assert chapters[1].chunks[0].kind == "code"
 
 
@@ -58,7 +58,7 @@ def test_structure_records_start_in_the_durable_queue() -> None:
     chapter = Chapter(
         book_id=BOOK_ID,
         chapter_index=0,
-        title="Глава",
+        title="Chapter",
         start_page=1,
         end_page=1,
         status=ProcessingStatus.QUEUED,
@@ -68,7 +68,7 @@ def test_structure_records_start_in_the_durable_queue() -> None:
         chunk_index=0,
         page_number=1,
         kind="text",
-        source_text="Текст.",
+        source_text="Text.",
         status=ProcessingStatus.QUEUED,
     )
 
@@ -78,7 +78,7 @@ def test_structure_records_start_in_the_durable_queue() -> None:
 def test_builder_uses_one_fallback_chapter_when_pdf_has_no_headings() -> None:
     document = ParsedDocument(
         page_count=1,
-        pages=(page(1, block(1, "Текст без заголовка.")),),
+        pages=(page(1, block(1, "Text without a heading.")),),
     )
 
     chapters = BookStructureBuilder().build(document)
@@ -173,11 +173,7 @@ def test_builder_splits_a_long_document_with_only_a_cover_title_into_sections() 
         pages=tuple(
             page(
                 number,
-                *(
-                    (block(number, "A LONG DOCUMENT", heading=True),)
-                    if number == 1
-                    else ()
-                ),
+                *((block(number, "A LONG DOCUMENT", heading=True),) if number == 1 else ()),
                 block(number, f"Readable text on page {number}."),
             )
             for number in range(1, 6)
@@ -209,7 +205,7 @@ class MemoryStore:
 async def test_processor_persists_the_built_structure() -> None:
     document = ParsedDocument(
         page_count=1,
-        pages=(page(1, block(1, "Глава", heading=True), block(1, "Текст.")),),
+        pages=(page(1, block(1, "Chapter", heading=True), block(1, "Text.")),),
     )
     store = MemoryStore()
     book_id = UUID("12345678-1234-5678-1234-567812345678")

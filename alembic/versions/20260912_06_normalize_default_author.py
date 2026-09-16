@@ -16,8 +16,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute("UPDATE books SET author = 'Unknown author' WHERE author = 'Не указан'")
+    op.execute("UPDATE books SET author = 'Unknown author' WHERE author = ''")
 
 
 def downgrade() -> None:
-    op.execute("UPDATE books SET author = 'Не указан' WHERE author = 'Unknown author'")
+    op.execute("UPDATE books SET author = '' WHERE author = 'Unknown author'")

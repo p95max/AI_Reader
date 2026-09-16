@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # OpenAI TTS is the single supported synthesis backend. There is no local
     # model, CUDA configuration, or model download in the service image.
     tts_voice: str = "alloy"
-    tts_instruction: str = "Говори ясно, естественно и спокойно."
+    tts_instruction: str = "Speak clearly, naturally, and calmly."
     tts_openai_model: str = "gpt-4o-mini-tts"
     tts_openai_voice: str = "alloy"
     tts_openai_timeout_seconds: float = Field(default=60.0, gt=0)

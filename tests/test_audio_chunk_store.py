@@ -30,7 +30,7 @@ async def test_store_persists_measured_duration_and_object_key() -> None:
     store = SQLAlchemyAudioChunkStore(session_factory=lambda: session)  # type: ignore[arg-type]
     chunk = GeneratedAudioChunk(
         chunk_index=4,
-        narration="Готовый narration.",
+        narration="Completed narration.",
         storage_key="books/book/audio/000004.wav",
         content_type="audio/wav",
         duration_milliseconds=1_234,

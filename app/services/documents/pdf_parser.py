@@ -98,7 +98,8 @@ class PDFParser:
         r"|(?:if|for|while)\s*\([^\n]*\)\s*\{"
         r"|(?:if|for|while)\s+[^\n]+:\s*$"
         r"|(?:public|private|static)\s+(?:static\s+)?\w+\s+\w+\s*\("
-        r")", re.MULTILINE,
+        r")",
+        re.MULTILINE,
     )
     formula_pattern = re.compile(r"[∑∫√≈≤≥±×÷]|\b[A-Za-z]\s*=\s*[^\n.]+[+*/^]")
 
@@ -252,7 +253,7 @@ class PDFParser:
     @classmethod
     def _normalized_margin_text(cls, text: str) -> str:
         normalized = cls._normalized_text(text)
-        if re.fullmatch(r"(?:page|p\.?|страница)\s+\d+", normalized):
+        if re.fullmatch(r"(?:page|p\.?)\s+\d+", normalized):
             return re.sub(r"\d+", "#", normalized)
         return normalized
 

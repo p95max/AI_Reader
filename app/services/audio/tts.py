@@ -79,21 +79,32 @@ def speech_instruction(
     style: ReadingStyle = ReadingStyle.NEUTRAL,
 ) -> str:
     pace = {
-        SpeechSpeed.NORMAL: "Используй обычный, естественный темп речи.",
-        SpeechSpeed.SLOW: "Говори медленнее обычного, чётко выделяя смысловые паузы.",
+        SpeechSpeed.NORMAL: "Use a natural, conversational pace.",
+        SpeechSpeed.SLOW: "Speak more slowly than usual, with clear pauses between ideas.",
     }[speed]
     delivery = {
-        ReadingStyle.NEUTRAL: "Сохраняй нейтральную, информативную подачу.",
-        ReadingStyle.CALM: "Используй спокойную, мягкую подачу без излишней экспрессии.",
-        ReadingStyle.EXPRESSIVE: "Подчёркивай важные мысли естественной выразительной интонацией.",
+        ReadingStyle.NEUTRAL: "Keep a neutral, informative delivery.",
+        ReadingStyle.CALM: "Use a calm, gentle delivery without excessive emphasis.",
+        ReadingStyle.EXPRESSIVE: "Emphasize important ideas with natural expressive intonation.",
     }[style]
     return f"{settings.tts_instruction.strip()} {pace} {delivery}"
 
 
 OPENAI_TTS_VOICES = frozenset(
     {
-        "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin",
-        "nova", "onyx", "sage", "shimmer", "verse",
+        "alloy",
+        "ash",
+        "ballad",
+        "cedar",
+        "coral",
+        "echo",
+        "fable",
+        "marin",
+        "nova",
+        "onyx",
+        "sage",
+        "shimmer",
+        "verse",
     }
 )
 _LEGACY_OPENAI_VOICE_MAP = {"ryan": "onyx", "aiden": "echo", "vivian": "nova"}

@@ -20,7 +20,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "books",
-        sa.Column("author", sa.String(length=255), nullable=False, server_default="Не указан"),
+        sa.Column("author", sa.String(length=255), nullable=False, server_default="Unknown author"),
     )
     op.alter_column("books", "author", server_default=None)
 

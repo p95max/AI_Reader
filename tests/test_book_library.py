@@ -10,7 +10,7 @@ from app.services.books.book_library import build_book_library_item
 def book(status: BookStatus) -> Book:
     return Book(
         id=UUID("12345678-1234-5678-1234-567812345678"),
-        title="Python для инженеров",
+        title="Python for Engineers",
         author="Unknown author",
         original_filename="python.pdf",
         storage_key="books/book/original.pdf",

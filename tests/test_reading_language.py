@@ -19,7 +19,7 @@ def test_auto_detect_keeps_the_source_language() -> None:
 
 @pytest.mark.parametrize(
     ("language", "name"),
-    (("en", "English"), ("ru", "Russian"), ("de", "German")),
+    (("en", "English"), ("de", "German")),
 )
 def test_explicit_language_requests_translation_when_needed(language: str, name: str) -> None:
     assert name in narration_language_instruction(language)

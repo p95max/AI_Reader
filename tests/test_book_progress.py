@@ -13,7 +13,7 @@ def chapter(id: UUID, index: int, *, status: ProcessingStatus = ProcessingStatus
         id=id,
         book_id=BOOK_ID,
         chapter_index=index,
-        title=f"Глава {index + 1}",
+        title=f"Chapter {index + 1}",
         start_page=index + 1,
         end_page=index + 1,
         status=status,
@@ -32,7 +32,7 @@ def chunk(
         chunk_index=index,
         page_number=index + 1,
         kind="text",
-        source_text="Текст.",
+        source_text="Text.",
         status=status,
     )
 

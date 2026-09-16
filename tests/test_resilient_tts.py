@@ -22,7 +22,7 @@ class FakeGenerator:
         self.deleted_storage_keys: list[str] = []
 
     def split_narration(self, _narration: str) -> list[str]:
-        return ["Первый chunk.", "Второй chunk."]
+        return ["First chunk.", "Second chunk."]
 
     def generate_chunk(
         self, _book_id: UUID, index: int, text: str, **_kwargs: object
@@ -131,7 +131,7 @@ async def test_failed_chunk_is_checkpointed_for_retry(caplog: pytest.LogCaptureF
     assert store.failed_calls == [
         {
             "chunk_index": 1,
-            "narration": "Второй chunk.",
+            "narration": "Second chunk.",
             "storage_key": f"books/{BOOK_ID}/audio/000001.wav",
             "voice": "Narrator",
             "tts_provider": "openai",

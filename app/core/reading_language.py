@@ -8,7 +8,6 @@ class ReadingLanguage(StrEnum):
 
     AUTO = "auto"
     ENGLISH = "en"
-    RUSSIAN = "ru"
     GERMAN = "de"
 
 
@@ -23,7 +22,6 @@ def narration_language_instruction(language: ReadingLanguage | str) -> str:
 
     language_name = {
         ReadingLanguage.ENGLISH: "English",
-        ReadingLanguage.RUSSIAN: "Russian",
         ReadingLanguage.GERMAN: "German",
     }[selected]
     return f"Produce the narration in {language_name}, translating the source when necessary."

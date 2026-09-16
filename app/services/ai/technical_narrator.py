@@ -252,12 +252,6 @@ class TechnicalNarrator:
                 "diagram": "Diagram skipped by the reading setting.",
                 "formula": "Formula skipped by the reading setting.",
             },
-            "ru": {
-                "code": "Фрагмент кода пропущен по настройке чтения.",
-                "table": "Таблица пропущена по настройке чтения.",
-                "diagram": "Диаграмма пропущена по настройке чтения.",
-                "formula": "Формула пропущена по настройке чтения.",
-            },
             "de": {
                 "code": "Codeabschnitt wurde durch die Leseeinstellung übersprungen.",
                 "table": "Tabelle wurde durch die Leseeinstellung übersprungen.",

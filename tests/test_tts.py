@@ -53,7 +53,7 @@ def test_openai_tts_maps_existing_voice_and_returns_wav() -> None:
     )
 
     result = OpenAITTSSynthesizer(settings, client=client).synthesize(
-        SpeechRequest(text="Тест", voice="Vivian", speed=SpeechSpeed.SLOW)
+        SpeechRequest(text="Test", voice="Vivian", speed=SpeechSpeed.SLOW)
     )
 
     call = client.audio.speech.calls[0]
@@ -68,24 +68,22 @@ def test_openai_tts_rejects_unknown_voice_before_call() -> None:
     client = FakeOpenAIClient(wav_bytes())
     with pytest.raises(Exception, match="Unknown OpenAI TTS voice"):
         OpenAITTSSynthesizer(get_settings(), client=client).synthesize(
-            SpeechRequest(text="Тест", voice="unsupported")
+            SpeechRequest(text="Test", voice="unsupported")
         )
     assert client.audio.speech.calls == []
 
 
 def test_slow_mode_changes_the_speech_instruction() -> None:
     settings = get_settings()
-    assert "медленнее" in speech_instruction(settings, SpeechSpeed.SLOW)
-    assert "обычный" in speech_instruction(settings, SpeechSpeed.NORMAL)
+    assert "more slowly" in speech_instruction(settings, SpeechSpeed.SLOW)
+    assert "natural" in speech_instruction(settings, SpeechSpeed.NORMAL)
 
 
 def test_reading_style_changes_the_speech_instruction() -> None:
     settings = get_settings()
 
-    assert "спокойную" in speech_instruction(settings, SpeechSpeed.NORMAL, ReadingStyle.CALM)
-    assert "выразительной" in speech_instruction(
-        settings, SpeechSpeed.NORMAL, ReadingStyle.EXPRESSIVE
-    )
+    assert "calm" in speech_instruction(settings, SpeechSpeed.NORMAL, ReadingStyle.CALM)
+    assert "expressive" in speech_instruction(settings, SpeechSpeed.NORMAL, ReadingStyle.EXPRESSIVE)
 
 
 def test_tts_tasks_are_routed_to_a_dedicated_queue() -> None:

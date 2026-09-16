@@ -45,15 +45,15 @@ class MemoryStorage:
 
 def test_chunker_prefers_sentence_boundaries_and_never_exceeds_limit() -> None:
     chunker = NarrationChunker(max_characters=25)
-    chunks = chunker.split("Первое предложение. Второе предложение. Третье предложение.")
+    chunks = chunker.split("First sentence. Second sentence. Third sentence.")
 
-    assert chunks == ["Первое предложение.", "Второе предложение.", "Третье предложение."]
+    assert chunks == ["First sentence.", "Second sentence.", "Third sentence."]
     assert all(len(chunk) <= 25 for chunk in chunks)
 
 
 def test_chunker_splits_a_long_sentence_at_word_boundaries() -> None:
     chunker = NarrationChunker(max_characters=100)
-    chunks = chunker.split("слово " * 80)
+    chunks = chunker.split("word " * 80)
 
     assert len(chunks) > 1
     assert all(len(chunk) <= 100 for chunk in chunks)
@@ -68,7 +68,7 @@ def test_generator_saves_wav_and_duration_for_every_chunk() -> None:
     )
     book_id = UUID("12345678-1234-5678-1234-567812345678")
 
-    chunks = generator.generate(book_id, "Первое предложение. Второе предложение.")
+    chunks = generator.generate(book_id, "First sentence. Second sentence.")
 
     assert [chunk.duration_milliseconds for chunk in chunks] == [1_500, 1_500]
     assert [chunk.storage_key for chunk in chunks] == [
