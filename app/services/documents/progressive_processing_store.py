@@ -21,7 +21,9 @@ class SQLAlchemyProgressiveProcessingStore:
     def __init__(self, session_factory: SessionFactory = SessionLocal) -> None:
         self._session_factory = session_factory
 
-    async def pending_chunks(self, book_id: UUID) -> tuple[PendingContentChunk, ...]:
+    async def pending_chunks(
+        self, book_id: UUID, *, start_page: int, end_page: int
+    ) -> tuple[PendingContentChunk, ...]:
         async with self._session_factory() as session:
             rows = await session.execute(
                 select(ContentChunk.id, Chapter.chapter_index, ContentChunk.chunk_index)
@@ -29,6 +31,7 @@ class SQLAlchemyProgressiveProcessingStore:
                 .where(
                     Chapter.book_id == book_id,
                     ContentChunk.status == ProcessingStatus.QUEUED,
+                    ContentChunk.page_number.between(start_page, end_page),
                 )
                 .order_by(Chapter.chapter_index, ContentChunk.chunk_index)
             )

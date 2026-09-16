@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.services.documents.progressive_processing import ProgressivePlan, ProgressiveProcessingPlanner
+from app.services.documents.progressive_processing import (
+    ProgressivePlan,
+    ProgressiveProcessingPlanner,
+)
 from app.services.documents.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
 
 
@@ -17,8 +20,10 @@ class ProgressiveProcessingCoordinator:
         self._planner = planner
         self._store = store
 
-    async def plan(self, book_id: UUID) -> ProgressivePlan:
-        pending_chunks = await self._store.pending_chunks(book_id)
+    async def plan(self, book_id: UUID, *, start_page: int, end_page: int) -> ProgressivePlan:
+        pending_chunks = await self._store.pending_chunks(
+            book_id, start_page=start_page, end_page=end_page
+        )
         ready_duration = await self._store.ready_audio_duration_milliseconds(book_id)
         return self._planner.plan(
             pending_chunks,

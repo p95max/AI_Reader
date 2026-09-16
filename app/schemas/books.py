@@ -20,6 +20,10 @@ class BookRead(BaseModel):
     original_filename: str
     content_type: str
     size_bytes: int
+    page_count: int
+    processing_start_page: int
+    processing_end_page: int
+    processing_paused: bool
     status: BookStatus
     reading_language: ReadingLanguage
     tts_voice: str
@@ -43,6 +47,9 @@ class BookLibraryItemRead(BaseModel):
 
 
 class BookProcessingEstimateRead(BaseModel):
+    page_count: int
+    start_page: int
+    end_page: int
     estimated_input_tokens: int
     estimated_output_tokens: int
     estimated_total_tokens: int
@@ -109,6 +116,11 @@ class NarrationPreferences(BaseModel):
 
 class BookTTSSettingsUpdate(NarrationPreferences):
     pass
+
+
+class BookProcessingRequest(BookTTSSettingsUpdate):
+    start_page: int = Field(default=1, ge=1)
+    end_page: int | None = Field(default=None, ge=1)
 
 
 class UserPreferencesUpdate(NarrationPreferences):

@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -29,9 +29,9 @@ from app.schemas.books import (
     BookCostRead,
     BookLibraryItemRead,
     BookProcessingEstimateRead,
+    BookProcessingRequest,
     BookProgressRead,
     BookRead,
-    BookTTSSettingsUpdate,
     BookUsageSummaryRead,
     PlaybackPositionRead,
     PlaybackPositionUpdate,
@@ -42,14 +42,22 @@ from app.services.books.book_library import build_book_library_item
 from app.services.books.book_metadata import extract_pdf_book_metadata
 from app.services.books.book_progress import BookProgressService
 from app.services.books.usage_summary import UsageSummaryService
-from app.services.books.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
+from app.services.books.user_preferences import (
+    apply_preferences_to_book,
+    get_or_create_user_preferences,
+)
 from app.services.documents.uploads import (
     InvalidPDFUpload,
     PDFPageLimitExceeded,
     UploadTooLarge,
+    pdf_page_count,
     persist_pdf_upload,
 )
-from app.services.infrastructure.storage import ObjectStorage, ObjectStorageError, get_object_storage
+from app.services.infrastructure.storage import (
+    ObjectStorage,
+    ObjectStorageError,
+    get_object_storage,
+)
 
 router = APIRouter()
 
@@ -72,12 +80,50 @@ async def estimate_processing(
     pricing = settings.pricing_for_model()
     estimate = estimate_book_processing_with_pricing(file_size_bytes, pricing=pricing)
     return BookProcessingEstimateRead(
+        page_count=0,
+        start_page=1,
+        end_page=0,
         estimated_input_tokens=estimate.estimated_input_tokens,
         estimated_output_tokens=estimate.estimated_output_tokens,
         estimated_total_tokens=estimate.estimated_total_tokens,
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
         estimated_audio_seconds=estimate.estimated_audio_seconds,
         model_name=settings.ai_model,
+        pricing_version=pricing.version,
+    )
+
+
+@router.get("/{book_id}/estimate", response_model=BookProcessingEstimateRead)
+async def estimate_uploaded_processing(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    start_page: Annotated[int, Query(ge=1)] = 1,
+    end_page: Annotated[int | None, Query(ge=1)] = None,
+) -> BookProcessingEstimateRead:
+    """Estimate the selected page range before it is submitted to the worker queue."""
+    book = await session.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    resolved_end_page = end_page or book.page_count
+    if start_page > resolved_end_page or resolved_end_page > book.page_count:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid page range",
+        )
+    selected_pages = resolved_end_page - start_page + 1
+    selected_size = max(1, round(book.size_bytes * selected_pages / book.page_count))
+    pricing = get_settings().pricing_for_model()
+    estimate = estimate_book_processing_with_pricing(selected_size, pricing=pricing)
+    return BookProcessingEstimateRead(
+        page_count=book.page_count,
+        start_page=start_page,
+        end_page=resolved_end_page,
+        estimated_input_tokens=estimate.estimated_input_tokens,
+        estimated_output_tokens=estimate.estimated_output_tokens,
+        estimated_total_tokens=estimate.estimated_total_tokens,
+        estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
+        estimated_audio_seconds=estimate.estimated_audio_seconds,
+        model_name=get_settings().ai_model,
         pricing_version=pricing.version,
     )
 
@@ -376,6 +422,7 @@ async def create_book(
         temporary_path,
         filename,
     )
+    page_count = await run_in_threadpool(pdf_page_count, temporary_path)
     pricing = settings.pricing_for_model()
     estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
     preferences = await get_or_create_user_preferences(session, settings)
@@ -388,6 +435,9 @@ async def create_book(
         storage_key="pending",
         content_type="application/pdf",
         size_bytes=size_bytes,
+        page_count=page_count,
+        processing_start_page=1,
+        processing_end_page=page_count,
         estimated_input_tokens=estimate.estimated_input_tokens,
         estimated_output_tokens=estimate.estimated_output_tokens,
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
@@ -423,19 +473,27 @@ async def start_book_processing(
     book_id: UUID,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    payload: BookTTSSettingsUpdate | None = None,
+    payload: BookProcessingRequest | None = None,
 ) -> Book:
     """Queue PDF structure extraction after the client confirms processing settings."""
     book = await session.get(Book, book_id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
-    if book.status == BookStatus.READY:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Book is already ready")
-    if book.status == BookStatus.PROCESSING:
+    if book.status == BookStatus.PROCESSING and not book.processing_paused:
         return book
 
     preferences = payload or await get_or_create_user_preferences(session)
     apply_preferences_to_book(book, preferences)
+    start_page = payload.start_page if payload else book.processing_start_page
+    end_page = (payload.end_page if payload and payload.end_page else book.processing_end_page)
+    if start_page > end_page or end_page > book.page_count:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid page range",
+        )
+    book.processing_start_page = start_page
+    book.processing_end_page = end_page
+    book.processing_paused = False
 
     book.status = BookStatus.PROCESSING
     await session.commit()
@@ -451,6 +509,41 @@ async def start_book_processing(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Processing queue is unavailable; the uploaded book can be retried",
         ) from error
+    return book
+
+
+@router.post("/{book_id}/pause", response_model=BookRead)
+async def pause_book_processing(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Book:
+    """Pause new narration and TTS work without deleting ready audio."""
+    book = await session.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    book.processing_paused = True
+    await session.execute(
+        update(ContentChunk)
+        .where(ContentChunk.chapter_id.in_(select(Chapter.id).where(Chapter.book_id == book_id)))
+        .where(ContentChunk.status == ProcessingStatus.PROCESSING)
+        .values(status=ProcessingStatus.QUEUED)
+    )
+    await session.commit()
+    await session.refresh(book)
+    return book
+
+
+@router.post("/{book_id}/cancel", response_model=BookRead)
+async def cancel_book_processing(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Book:
+    """Stop pending work while retaining the PDF and any audio already generated."""
+    book = await pause_book_processing(book_id, session)
+    book.status = BookStatus.UPLOADED
+    book.processing_paused = False
+    await session.commit()
+    await session.refresh(book)
     return book
 
 

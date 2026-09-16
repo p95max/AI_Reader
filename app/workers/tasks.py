@@ -114,6 +114,12 @@ def plan_book_processing(book_id: str) -> dict[str, object]:
 
 async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
     settings = get_settings()
+    async with SessionLocal() as session:
+        book = await session.get(Book, book_id)
+    if book is None:
+        return {"book_id": str(book_id), "status": "obsolete"}
+    if book.status != BookStatus.PROCESSING or book.processing_paused:
+        return {"book_id": str(book_id), "status": "paused"}
     plan = await ProgressiveProcessingCoordinator(
         ProgressiveProcessingPlanner(
             priority_chapter_count=settings.progressive_priority_chapter_count,
@@ -122,7 +128,11 @@ async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
             ),
         ),
         SQLAlchemyProgressiveProcessingStore(),
-    ).plan(book_id)
+    ).plan(
+        book_id,
+        start_page=book.processing_start_page,
+        end_page=book.processing_end_page,
+    )
     for chunk in plan.chunks:
         narrate_content_chunk.apply_async(
             args=[str(chunk.id)], queue="processing", priority=chunk.priority
@@ -173,6 +183,8 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
         if row is None:
             return {"content_chunk_id": str(content_chunk_id), "status": "obsolete"}
         content_chunk, chapter, book = row
+        if book.status != BookStatus.PROCESSING or book.processing_paused:
+            return {"content_chunk_id": str(content_chunk_id), "status": "paused"}
         if content_chunk.status == ProcessingStatus.READY:
             return {"content_chunk_id": str(content_chunk_id), "status": "ready"}
         content_chunk.status = ProcessingStatus.PROCESSING
@@ -279,10 +291,20 @@ async def _refresh_completion(session, book_id: UUID, chapter_id: UUID) -> None:
         await session.execute(
             update(Chapter).where(Chapter.id == chapter_id).values(status=ProcessingStatus.READY)
         )
+    book = await session.get(Book, book_id)
+    if book is None:
+        return
     remaining_in_book = await session.scalar(
         select(func.count(ContentChunk.id))
         .join(Chapter, ContentChunk.chapter_id == Chapter.id)
-        .where(Chapter.book_id == book_id, ContentChunk.status != ProcessingStatus.READY)
+        .where(
+            Chapter.book_id == book_id,
+            ContentChunk.page_number.between(
+                book.processing_start_page,
+                book.processing_end_page,
+            ),
+            ContentChunk.status != ProcessingStatus.READY,
+        )
     )
     if not remaining_in_book:
         await session.execute(
@@ -339,6 +361,8 @@ async def _synthesize_content_chunk(
         if row is None:
             return {"content_chunk_id": str(content_chunk_id), "status": "obsolete"}
         content_chunk, chapter, book = row
+        if book.status != BookStatus.PROCESSING or book.processing_paused:
+            return {"content_chunk_id": str(content_chunk_id), "status": "paused"}
         base_index = await _content_audio_base_index(session, content_chunk, chapter)
 
     logger.info(

@@ -18,6 +18,12 @@ class PDFPageLimitExceeded(ValueError):
     """Raised when a PDF contains more pages than the service accepts."""
 
 
+def pdf_page_count(path: Path) -> int:
+    """Read the validated PDF page count for processing-range selection."""
+    with pymupdf.open(path) as document:
+        return document.page_count
+
+
 async def persist_pdf_upload(
     upload: UploadFile,
     max_size_bytes: int,

@@ -325,6 +325,7 @@ async function renderUpload() {
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
       <section class="upload-language-control" aria-label="Reading language"><label class="voice-setting upload-language-setting">Reading language<select id="reading-language-setting" aria-label="Reading language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="ru">Russian</option><option value="de">German</option></select></label></section>
+      <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div><label>From page <input id="start-page" type="number" min="1" value="1"></label><label>To page <input id="end-page" type="number" min="1" value="1"></label></div><small>Start with a chapter or a sample. You can return later and process more pages from the same uploaded PDF.</small></section>
       <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
       <details class="upload-settings"><summary>PROCESSING SETTINGS <span>Use saved defaults or customise this book</span></summary><div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div></details>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
@@ -339,6 +340,10 @@ async function renderUpload() {
   const selectedFile = document.querySelector("#selected-file");
   const startButton = document.querySelector("#start-processing");
   const statusMessage = document.querySelector("#upload-status");
+  const processingScope = document.querySelector("#processing-scope");
+  const pageCountNote = document.querySelector("#page-count-note");
+  const startPage = document.querySelector("#start-page");
+  const endPage = document.querySelector("#end-page");
   const readingLanguageSetting = document.querySelector("#reading-language-setting");
   const voiceSetting = document.querySelector("#voice-setting");
   const speedSetting = document.querySelector("#speed-setting");
@@ -348,6 +353,7 @@ async function renderUpload() {
   let tableMode = "summarize";
   let diagramMode = "describe";
   let formulaMode = "explain";
+  let uploadedBook = null;
   const maxPdfSizeBytes = 100 * 1024 * 1024;
   const appendParameterHelp = (element, text) => {
     const hint = document.createElement("small");
@@ -382,6 +388,18 @@ async function renderUpload() {
     document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_ai_cost_usd.toFixed(2)}`;
     document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
   };
+  const loadUploadedEstimate = async () => {
+    if (!uploadedBook) return;
+    const start = Number(startPage.value);
+    const end = Number(endPage.value);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > uploadedBook.page_count) return;
+    const response = await fetch(`/api/v1/books/${encodeURIComponent(uploadedBook.id)}/estimate?start_page=${start}&end_page=${end}`);
+    if (!response.ok) throw new Error("Unable to estimate this page range");
+    const estimate = await response.json();
+    document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
+    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_ai_cost_usd.toFixed(2)}`;
+    document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
+  };
   const responseError = async (response, fallback) => {
     if (response.status === 429) return "Too many requests. Please wait a minute before trying again.";
     const payload = await response.json().catch(() => null);
@@ -411,6 +429,12 @@ async function renderUpload() {
     }
   };
   fileInput.addEventListener("change", () => selectFile(fileInput.files[0]));
+  [startPage, endPage].forEach((input) => input.addEventListener("change", () => {
+    if (!uploadedBook) return;
+    startPage.value = String(Math.max(1, Math.min(uploadedBook.page_count, Number(startPage.value) || 1)));
+    endPage.value = String(Math.max(Number(startPage.value), Math.min(uploadedBook.page_count, Number(endPage.value) || uploadedBook.page_count)));
+    void loadUploadedEstimate().catch(() => { statusMessage.textContent = "Range estimate is unavailable. Please adjust the pages and try again."; });
+  }));
   dropZone.addEventListener("dragover", (event) => { event.preventDefault(); dropZone.classList.add("is-dragging"); });
   dropZone.addEventListener("dragleave", () => dropZone.classList.remove("is-dragging"));
   dropZone.addEventListener("drop", (event) => { event.preventDefault(); dropZone.classList.remove("is-dragging"); selectFile(event.dataTransfer.files[0]); });
@@ -465,21 +489,32 @@ async function renderUpload() {
     event.preventDefault();
     if (!file) return;
     startButton.disabled = true;
-    statusMessage.textContent = "Uploading PDF…";
+    statusMessage.textContent = uploadedBook ? "Starting selected pages…" : "Uploading PDF…";
     try {
-      const data = new FormData();
-      data.append("file", file);
-      const upload = await fetch("/api/v1/books", { method: "POST", body: data });
-      if (!upload.ok) throw new Error(await responseError(upload, "Upload failed. Please try again."));
-      const book = await upload.json();
-      statusMessage.textContent = "Starting processing…";
-      const processing = await fetch(`/api/v1/books/${book.id}/process`, {
+      if (!uploadedBook) {
+        const data = new FormData();
+        data.append("file", file);
+        const upload = await fetch("/api/v1/books", { method: "POST", body: data });
+        if (!upload.ok) throw new Error(await responseError(upload, "Upload failed. Please try again."));
+        uploadedBook = await upload.json();
+        processingScope.hidden = false;
+        startPage.max = String(uploadedBook.page_count);
+        endPage.max = String(uploadedBook.page_count);
+        endPage.value = String(uploadedBook.page_count);
+        pageCountNote.textContent = `${uploadedBook.page_count} pages detected. Review the estimate, then confirm processing.`;
+        await loadUploadedEstimate();
+        startButton.textContent = "CONFIRM & START PROCESSING";
+        startButton.disabled = false;
+        statusMessage.textContent = "PDF stored. Choose the page range and review the estimate before processing.";
+        return;
+      }
+      const processing = await fetch(`/api/v1/books/${uploadedBook.id}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reading_language: readingLanguageSetting.value, voice: voiceSetting.value, speed: speedSetting.value, style: readingStyle, code_mode: codeMode, table_mode: tableMode, diagram_mode: diagramMode, formula_mode: formulaMode }),
+        body: JSON.stringify({ reading_language: readingLanguageSetting.value, voice: voiceSetting.value, speed: speedSetting.value, style: readingStyle, code_mode: codeMode, table_mode: tableMode, diagram_mode: diagramMode, formula_mode: formulaMode, start_page: Number(startPage.value), end_page: Number(endPage.value) }),
       });
       if (!processing.ok) throw new Error(await responseError(processing, "Processing could not be started."));
-      window.location.assign(`/books/${book.id}`);
+      window.location.assign(`/books/${uploadedBook.id}`);
     } catch (error) {
       startButton.disabled = false;
       statusMessage.textContent = error.message || "Upload failed. Please try again.";
@@ -591,7 +626,7 @@ function formatPlaybackTime(seconds) {
 async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div></section>
     <div class="player-workspace"><div class="player-main"><section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section></div>
     <div id="chapters-backdrop" class="chapters-backdrop" hidden></div><aside id="chapter-navigation" class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button><button type="button" id="close-chapters" class="close-chapters" aria-label="Close chapters">×</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></aside></div>
     <details class="usage-panel" id="usage-panel" open><summary><span><h2>USAGE &amp; COST</h2><small>Live processing totals</small></span><b aria-hidden="true">⌄</b></summary><div class="usage-grid"><article class="usage-card"><span>AI TOKENS</span><b id="usage-tokens">—</b><small id="usage-token-detail">Input / output</small></article><article class="usage-card"><span>AI COST</span><b id="usage-ai-cost">—</b><small id="usage-ai-requests">LLM requests</small></article><article class="usage-card"><span>GENERATED AUDIO</span><b id="usage-audio-duration">—</b><small id="usage-generation-time">Generation time</small></article><article class="usage-card"><span>TTS COST</span><b id="usage-tts-cost">—</b><small>Generated audio and GPU</small></article><article class="usage-card usage-card--total"><span>TOTAL COST</span><b id="usage-total-cost">—</b><small>AI adaptation + TTS</small></article></div><p id="usage-note">Loading usage data…</p></details>
@@ -635,6 +670,13 @@ async function renderBookPage() {
   const usageTtsCost = document.querySelector("#usage-tts-cost");
   const usageTotalCost = document.querySelector("#usage-total-cost");
   const usageNote = document.querySelector("#usage-note");
+  const processingControls = document.querySelector("#processing-controls");
+  const processingControlNote = document.querySelector("#processing-control-note");
+  const pauseProcessing = document.querySelector("#pause-processing");
+  const resumeProcessing = document.querySelector("#resume-processing");
+  const cancelProcessing = document.querySelector("#cancel-processing");
+  const extendEndPage = document.querySelector("#extend-end-page");
+  const extendProcessing = document.querySelector("#extend-processing");
   let chunks = [];
   let currentChunk = 0;
   let chapters = [];
@@ -956,6 +998,43 @@ async function renderBookPage() {
     author.textContent = book.author;
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
     cover.querySelector("b").textContent = book.title.slice(0, 1).toUpperCase() || "A";
+    processingControls.hidden = false;
+    extendEndPage.max = String(book.page_count);
+    extendEndPage.value = String(book.processing_end_page);
+    const processPayload = (endPage = book.processing_end_page) => ({ reading_language: book.reading_language, voice: book.tts_voice, speed: book.tts_speed, style: book.tts_style, code_mode: book.code_mode, table_mode: book.table_mode, diagram_mode: book.diagram_mode, formula_mode: book.formula_mode, start_page: book.processing_start_page, end_page: Number(endPage) });
+    const updateProcessingControls = (current) => {
+      const paused = current.processing_paused;
+      processingControlNote.textContent = paused ? "Processing is paused. Ready audio remains available." : `Pages ${current.processing_start_page}–${current.processing_end_page} of ${current.page_count} are selected.`;
+      pauseProcessing.hidden = paused;
+      resumeProcessing.hidden = !paused;
+      extendEndPage.value = String(current.processing_end_page);
+    };
+    updateProcessingControls(book);
+    pauseProcessing.addEventListener("click", async () => {
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/pause`, { method: "POST" });
+      if (!response.ok) return;
+      updateProcessingControls(await response.json());
+    });
+    resumeProcessing.addEventListener("click", async () => {
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/process`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(processPayload()) });
+      if (!response.ok) return;
+      updateProcessingControls(await response.json());
+    });
+    cancelProcessing.addEventListener("click", async () => {
+      if (!window.confirm("Stop pending processing? Existing audio will be kept.")) return;
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/cancel`, { method: "POST" });
+      if (!response.ok) return;
+      const updated = await response.json();
+      processingControlNote.textContent = "Pending processing was cancelled. You can choose a range and start again.";
+      pauseProcessing.hidden = true;
+      resumeProcessing.hidden = true;
+      extendEndPage.value = String(updated.processing_end_page);
+    });
+    extendProcessing.addEventListener("click", async () => {
+      const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/process`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(processPayload(extendEndPage.value)) });
+      if (!response.ok) return;
+      updateProcessingControls(await response.json());
+    });
     drawChapterNavigation();
     await loadUsage();
     window.setInterval(loadUsage, 15_000);
