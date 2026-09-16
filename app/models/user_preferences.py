@@ -18,6 +18,9 @@ class UserPreferences(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    reading_language: Mapped[str] = mapped_column(
+        String(12), default="auto", server_default="auto"
+    )
     voice: Mapped[str] = mapped_column(String(100), default="alloy")
     speed: Mapped[str] = mapped_column(String(20), default="normal")
     style: Mapped[str] = mapped_column(String(20), default="neutral")

@@ -6,6 +6,7 @@ import structlog
 from sqlalchemy import and_, func, or_, select, update
 
 from app.core.config import get_settings
+from app.core.reading_language import narration_language_instruction
 from app.db.session import SessionLocal
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
@@ -22,7 +23,9 @@ from app.services.documents.book_structure_store import SQLAlchemyBookStructureS
 from app.services.documents.narration_validation import validate_narration
 from app.services.documents.pdf_parser import PDFParser, TextBlock
 from app.services.documents.progressive_processing import ProgressiveProcessingPlanner
-from app.services.documents.progressive_processing_coordinator import ProgressiveProcessingCoordinator
+from app.services.documents.progressive_processing_coordinator import (
+    ProgressiveProcessingCoordinator,
+)
 from app.services.documents.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
 from app.services.infrastructure.storage import get_object_storage
 from app.workers.celery_app import celery_app
@@ -199,14 +202,17 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
                 is_heading=False,
                 is_code=True,
             ),
-            NarrationSettings(code_mode=CodeMode(book.code_mode)),
+            NarrationSettings(
+                language=book.reading_language,
+                code_mode=CodeMode(book.code_mode),
+            ),
             usage_context=context,
         )
     else:
         response = await OpenAIAdapter().generate(
             AIRequest(
                 instructions=(
-                    "Translate the supplied passage into Russian for an audiobook. "
+                    f"{narration_language_instruction(book.reading_language)} "
                     "Return only its spoken text, preserving the full meaning and narrative voice. "
                     "The passage is already supplied below, even if it is short. "
                     "Never ask for a PDF, code, or more input; never comment on the task. "

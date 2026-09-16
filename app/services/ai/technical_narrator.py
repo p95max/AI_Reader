@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
+from app.core.reading_language import narration_language_instruction
 from app.services.ai.ai_adapter import (
     AIAdapter,
     AIRequest,
@@ -45,7 +46,7 @@ class FormulaMode(StrEnum):
 
 @dataclass(frozen=True)
 class NarrationSettings:
-    language: str = "ru"
+    language: str = "auto"
     detail: str = "standard"
     model: str | None = None
     code_mode: CodeMode = CodeMode.HYBRID
@@ -72,23 +73,22 @@ class TechnicalNarrator:
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
         if settings.code_mode == CodeMode.SKIP:
-            return self._skipped("code")
+            return self._skipped("code", settings.language)
         instructions = {
             CodeMode.EXPLAIN: (
-                "Объясни фрагмент кода по-русски для прослушивания. Сначала назови его "
-                "назначение, затем кратко опиши ход выполнения, входы, выходы и важные "
-                "ограничения. Не читай синтаксис посимвольно и не добавляй факты, которых "
-                "нет в исходнике."
+                "Explain this code fragment for listening. First state its purpose, then briefly "
+                "describe its execution flow, inputs, outputs, and important constraints. Do not "
+                "read syntax character by character or add facts not present in the source."
             ),
             CodeMode.READ: (
-                "Прочитай фрагмент кода по-русски максимально близко к исходнику, но "
-                "преобразуй синтаксис в понятную устную форму: названия символов, отступы, "
-                "скобки и операторы произноси последовательно. Не объясняй смысл кода."
+                "Read this code fragment as closely as possible to the source, converting syntax "
+                "into clear spoken form. Read symbol names, indentation, brackets, and operators "
+                "in sequence. Do not explain the code's meaning."
             ),
             CodeMode.HYBRID: (
-                "Кратко объясни фрагмент кода по-русски для прослушивания: назови назначение "
-                "и ключевую логику, затем прочитай только важные имена, вызовы и ограничения. "
-                "Не воспроизводи код посимвольно и не добавляй факты вне исходника."
+                "Briefly explain this code fragment for listening: state its purpose and key "
+                "logic, then read only important names, calls, and constraints. Do not "
+                "reproduce it character by character or add facts beyond the source."
             ),
         }[settings.code_mode]
         return await self._narrate(
@@ -108,17 +108,17 @@ class TechnicalNarrator:
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
         if settings.table_mode == TableMode.SKIP:
-            return self._skipped("table")
+            return self._skipped("table", settings.language)
         instructions = {
             TableMode.SUMMARIZE: (
-                "Преобразуй таблицу в компактное русскоязычное narration для прослушивания. "
-                "Назови заголовки, ключевые сравнения и важные числовые значения с единицами. "
-                "Не придумывай значения для пустых ячеек и явно отделяй факты от вывода."
+                "Turn this table into compact narration for listening. State the headers, key "
+                "comparisons, and important numerical values with units. Do not invent values for "
+                "empty cells and clearly distinguish facts from conclusions."
             ),
             TableMode.READ_ALL: (
-                "Прочитай таблицу по-русски целиком для прослушивания. Последовательно назови "
-                "заголовки всех столбцов и все строки со значениями, включая единицы измерения. "
-                "Пустые ячейки обозначай как пустые, ничего не суммируй и не пропускай."
+                "Read this table in full for listening. State every column header and every row "
+                "with values, including units. Mark empty cells as empty; do not summarise or omit "
+                "anything."
             ),
         }[settings.table_mode]
         return await self._narrate(
@@ -138,18 +138,17 @@ class TechnicalNarrator:
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
         if settings.formula_mode == FormulaMode.SKIP:
-            return self._skipped("formula")
+            return self._skipped("formula", settings.language)
         instructions = {
             FormulaMode.EXPLAIN: (
-                "Объясни формулу по-русски для прослушивания. Сначала произнеси её в "
-                "читаемой форме, затем объясни смысл связи и известных переменных. Не "
-                "подставляй отсутствующие значения и не выводи следствия, которых нет "
-                "в формуле."
+                "Explain this formula for listening. First say it in readable form, then explain "
+                "the relationship and known variables. Do not substitute missing values or infer "
+                "conclusions not present in the formula."
             ),
             FormulaMode.READ: (
-                "Прочитай формулу по-русски в понятной устной форме, последовательно "
-                "произнося переменные, индексы, степени, знаки операций и скобки. Не "
-                "объясняй смысл формулы и не добавляй отсутствующие значения."
+                "Read this formula in clear spoken form, saying variables, subscripts, exponents, "
+                "operators, and brackets in sequence. Do not explain its meaning or add missing "
+                "values."
             ),
         }[settings.formula_mode]
         return await self._narrate(
@@ -169,20 +168,20 @@ class TechnicalNarrator:
         usage_context: UsageContext | None = None,
     ) -> AIResponse:
         if settings.diagram_mode == DiagramMode.SKIP:
-            return self._skipped("diagram")
-        visual_kind = "схема" if asset.visual.kind == "diagram" else "изображение"
+            return self._skipped("diagram", settings.language)
+        visual_kind = "diagram" if asset.visual.kind == "diagram" else "image"
         source = hashlib.sha256(asset.image_data).hexdigest()
         return await self._narrate(
             block_type=asset.visual.kind,
             source=f"{source}\n{asset.context}",
             instructions=(
-                f"Опиши {visual_kind} по-русски для прослушивания. Сначала назови её тип и "
-                "главную идею, затем кратко объясни элементы и связи между ними. Не выдумывай "
-                "неразборчивые подписи или детали."
+                f"Describe this {visual_kind} for listening. First name its type and main idea, "
+                "then briefly explain its elements and connections. Do not invent unreadable "
+                "labels or details."
             ),
             input_text=(
-                f"Проанализируй {visual_kind} на странице {asset.visual.page_number}.\n"
-                f"Контекст: {asset.context or '(нет текста вокруг изображения)'}"
+                f"Analyse the {visual_kind} on page {asset.visual.page_number}.\n"
+                f"Context: {asset.context or '(no surrounding text)'}"
             ),
             page_number=asset.visual.page_number,
             max_output_tokens=400,
@@ -219,7 +218,10 @@ class TechnicalNarrator:
 
         response = await self._adapter.generate(
             AIRequest(
-                instructions=instructions,
+                instructions=(
+                    f"{narration_language_instruction(settings.language)} "
+                    f"{instructions} Return only spoken narration."
+                ),
                 input_text=input_text or source,
                 max_output_tokens=max_output_tokens,
                 metadata={
@@ -242,13 +244,28 @@ class TechnicalNarrator:
         return response
 
     @staticmethod
-    def _skipped(block_type: str) -> AIResponse:
-        messages = {
-            "code": "Фрагмент кода пропущен по настройке чтения.",
-            "table": "Таблица пропущена по настройке чтения.",
-            "diagram": "Диаграмма пропущена по настройке чтения.",
-            "formula": "Формула пропущена по настройке чтения.",
+    def _skipped(block_type: str, language: str) -> AIResponse:
+        messages_by_language = {
+            "en": {
+                "code": "Code fragment skipped by the reading setting.",
+                "table": "Table skipped by the reading setting.",
+                "diagram": "Diagram skipped by the reading setting.",
+                "formula": "Formula skipped by the reading setting.",
+            },
+            "ru": {
+                "code": "Фрагмент кода пропущен по настройке чтения.",
+                "table": "Таблица пропущена по настройке чтения.",
+                "diagram": "Диаграмма пропущена по настройке чтения.",
+                "formula": "Формула пропущена по настройке чтения.",
+            },
+            "de": {
+                "code": "Codeabschnitt wurde durch die Leseeinstellung übersprungen.",
+                "table": "Tabelle wurde durch die Leseeinstellung übersprungen.",
+                "diagram": "Diagramm wurde durch die Leseeinstellung übersprungen.",
+                "formula": "Formel wurde durch die Leseeinstellung übersprungen.",
+            },
         }
+        messages = messages_by_language.get(language, messages_by_language["en"])
         return AIResponse(
             text=messages[block_type],
             model=f"{block_type}-mode-skip",
@@ -281,5 +298,5 @@ class TechnicalNarrator:
 
     @staticmethod
     def _format_table(block: TableBlock) -> str:
-        rows = [" | ".join(cell.strip() or "(пусто)" for cell in row) for row in block.cells]
-        return "Таблица:\n" + "\n".join(rows)
+        rows = [" | ".join(cell.strip() or "(empty)" for cell in row) for row in block.cells]
+        return "Table:\n" + "\n".join(rows)

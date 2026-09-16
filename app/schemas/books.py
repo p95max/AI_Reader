@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.reading_language import ReadingLanguage
 from app.models.book import BookStatus
 from app.models.chapter import ProcessingStatus
 from app.services.ai.technical_narrator import CodeMode, DiagramMode, FormulaMode, TableMode
@@ -20,6 +21,7 @@ class BookRead(BaseModel):
     content_type: str
     size_bytes: int
     status: BookStatus
+    reading_language: ReadingLanguage
     tts_voice: str
     tts_speed: SpeechSpeed
     tts_style: ReadingStyle
@@ -95,6 +97,7 @@ class BookUsageSummaryRead(BaseModel):
 
 
 class NarrationPreferences(BaseModel):
+    reading_language: ReadingLanguage = ReadingLanguage.AUTO
     voice: str = Field(default="alloy", min_length=1, max_length=100)
     speed: SpeechSpeed = SpeechSpeed.NORMAL
     style: ReadingStyle = ReadingStyle.NEUTRAL

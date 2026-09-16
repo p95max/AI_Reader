@@ -30,6 +30,7 @@ def apply_preferences_to_book(
     book: Book, preferences: NarrationPreferences | UserPreferences
 ) -> None:
     """Persist an immutable processing snapshot on the book."""
+    book.reading_language = _plain_value(preferences.reading_language)
     book.tts_voice = preferences.voice
     book.tts_speed = _plain_value(preferences.speed)
     book.tts_style = _plain_value(preferences.style)

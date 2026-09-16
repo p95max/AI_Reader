@@ -74,10 +74,10 @@ async def test_narrator_builds_code_request() -> None:
     request = adapter.requests[0]
     assert request.metadata["block_type"] == "code"
     assert request.metadata["page_number"] == "3"
-    assert request.metadata["language"] == "ru"
+    assert request.metadata["language"] == "auto"
     assert request.metadata["code_mode"] == "explain"
     assert request.input_text.startswith("def total")
-    assert "Не читай синтаксис посимвольно" in request.instructions
+    assert "Do not read syntax character by character" in request.instructions
 
 
 @pytest.mark.asyncio
@@ -95,9 +95,9 @@ async def test_narrator_passes_book_usage_context_to_billable_request() -> None:
 @pytest.mark.parametrize(
     ("code_mode", "instruction_fragment"),
     (
-        (CodeMode.EXPLAIN, "Объясни фрагмент кода"),
-        (CodeMode.READ, "Прочитай фрагмент кода"),
-        (CodeMode.HYBRID, "Кратко объясни фрагмент кода"),
+        (CodeMode.EXPLAIN, "Explain this code fragment"),
+        (CodeMode.READ, "Read this code fragment"),
+        (CodeMode.HYBRID, "Briefly explain this code fragment"),
     ),
 )
 async def test_narrator_selects_prompt_for_each_billable_code_mode(
@@ -142,16 +142,16 @@ async def test_narrator_builds_table_request_without_losing_empty_cells() -> Non
     assert request.metadata["block_type"] == "table"
     assert request.metadata["page_number"] == "4"
     assert request.metadata["detail"] == "standard"
-    assert request.input_text == "Таблица:\nMetric | Value\nPages | 42\nNotes | (пусто)"
-    assert "Не придумывай значения" in request.instructions
+    assert request.input_text == "Table:\nMetric | Value\nPages | 42\nNotes | (empty)"
+    assert "Do not invent values" in request.instructions
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("table_mode", "instruction_fragment"),
     (
-        (TableMode.SUMMARIZE, "ключевые сравнения"),
-        (TableMode.READ_ALL, "все строки со значениями"),
+        (TableMode.SUMMARIZE, "key comparisons"),
+        (TableMode.READ_ALL, "every row with values"),
     ),
 )
 async def test_narrator_selects_prompt_for_each_billable_table_mode(
@@ -192,15 +192,15 @@ async def test_narrator_builds_formula_request() -> None:
     assert request.metadata["block_type"] == "formula"
     assert request.metadata["page_number"] == "5"
     assert request.input_text == "E = m * c^2"
-    assert "объясни смысл связи" in request.instructions.lower()
+    assert "explain the relationship" in request.instructions.lower()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("formula_mode", "instruction_fragment"),
     (
-        (FormulaMode.EXPLAIN, "Объясни формулу"),
-        (FormulaMode.READ, "Прочитай формулу"),
+        (FormulaMode.EXPLAIN, "Explain this formula"),
+        (FormulaMode.READ, "Read this formula"),
     ),
 )
 async def test_narrator_selects_prompt_for_each_billable_formula_mode(

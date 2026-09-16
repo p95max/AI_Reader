@@ -22,6 +22,7 @@ def make_book() -> Book:
 
 def test_saved_user_preferences_are_copied_to_the_processing_book() -> None:
     preferences = UserPreferencesUpdate(
+        reading_language="de",
         voice="Vivian",
         speed="slow",
         style="expressive",
@@ -35,6 +36,7 @@ def test_saved_user_preferences_are_copied_to_the_processing_book() -> None:
     apply_preferences_to_book(book, preferences)
 
     assert book.tts_voice == "Vivian"
+    assert book.reading_language == "de"
     assert book.tts_speed == "slow"
     assert book.tts_style == "expressive"
     assert book.code_mode == "read"
@@ -46,6 +48,7 @@ def test_saved_user_preferences_are_copied_to_the_processing_book() -> None:
 def test_orm_preferences_are_copied_to_the_processing_book() -> None:
     preferences = UserPreferences(
         user_id=UUID("87654321-4321-8765-4321-876543218765"),
+        reading_language="en",
         voice="Aiden",
         speed="normal",
         style="calm",
@@ -59,6 +62,7 @@ def test_orm_preferences_are_copied_to_the_processing_book() -> None:
     apply_preferences_to_book(book, preferences)
 
     assert book.tts_voice == "Aiden"
+    assert book.reading_language == "en"
     assert book.code_mode == "hybrid"
     assert book.table_mode == "summarize"
     assert book.diagram_mode == "describe"
