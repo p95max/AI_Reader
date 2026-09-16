@@ -18,7 +18,23 @@ def test_estimate_uses_configured_token_pricing() -> None:
     assert estimate.estimated_output_tokens == 2_500
     assert estimate.estimated_total_tokens == 12_500
     assert estimate.estimated_ai_cost_usd == 0.04
+    assert estimate.estimated_tts_cost_usd == 0
+    assert estimate.estimated_total_cost_usd == 0.04
     assert estimate.estimated_audio_seconds > 0
+
+
+def test_estimate_includes_external_tts_cost() -> None:
+    estimate = estimate_book_processing(
+        80_000,
+        input_cost_per_million_tokens=2.0,
+        output_cost_per_million_tokens=8.0,
+        tts_cost_per_audio_hour_usd=0.90,
+    )
+
+    # 12,500 estimated tokens correspond to 3,500 seconds of audio at the
+    # deliberately conservative pre-extraction speech-duration estimate.
+    assert estimate.estimated_tts_cost_usd == 0.875
+    assert estimate.estimated_total_cost_usd == 0.915
 
 
 def test_estimate_uses_versioned_model_price_list() -> None:

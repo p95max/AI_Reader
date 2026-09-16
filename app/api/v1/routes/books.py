@@ -80,7 +80,11 @@ async def estimate_processing(
             detail="PDF exceeds the configured size limit",
         )
     pricing = settings.pricing_for_model()
-    estimate = estimate_book_processing_with_pricing(file_size_bytes, pricing=pricing)
+    estimate = estimate_book_processing_with_pricing(
+        file_size_bytes,
+        pricing=pricing,
+        tts_cost_per_audio_hour_usd=settings.tts_external_cost_per_audio_hour_usd,
+    )
     return BookProcessingEstimateRead(
         page_count=0,
         start_page=1,
@@ -89,6 +93,8 @@ async def estimate_processing(
         estimated_output_tokens=estimate.estimated_output_tokens,
         estimated_total_tokens=estimate.estimated_total_tokens,
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
+        estimated_tts_cost_usd=estimate.estimated_tts_cost_usd,
+        estimated_total_cost_usd=estimate.estimated_total_cost_usd,
         estimated_audio_seconds=estimate.estimated_audio_seconds,
         model_name=settings.ai_model,
         pricing_version=pricing.version,
@@ -115,7 +121,11 @@ async def estimate_uploaded_processing(
     selected_pages = resolved_end_page - start_page + 1
     selected_size = max(1, round(book.size_bytes * selected_pages / book.page_count))
     pricing = get_settings().pricing_for_model()
-    estimate = estimate_book_processing_with_pricing(selected_size, pricing=pricing)
+    estimate = estimate_book_processing_with_pricing(
+        selected_size,
+        pricing=pricing,
+        tts_cost_per_audio_hour_usd=get_settings().tts_external_cost_per_audio_hour_usd,
+    )
     return BookProcessingEstimateRead(
         page_count=book.page_count,
         start_page=start_page,
@@ -124,6 +134,8 @@ async def estimate_uploaded_processing(
         estimated_output_tokens=estimate.estimated_output_tokens,
         estimated_total_tokens=estimate.estimated_total_tokens,
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
+        estimated_tts_cost_usd=estimate.estimated_tts_cost_usd,
+        estimated_total_cost_usd=estimate.estimated_total_cost_usd,
         estimated_audio_seconds=estimate.estimated_audio_seconds,
         model_name=get_settings().ai_model,
         pricing_version=pricing.version,
@@ -452,7 +464,11 @@ async def create_book(
     )
     page_count = await run_in_threadpool(pdf_page_count, temporary_path)
     pricing = settings.pricing_for_model()
-    estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
+    estimate = estimate_book_processing_with_pricing(
+        size_bytes,
+        pricing=pricing,
+        tts_cost_per_audio_hour_usd=settings.tts_external_cost_per_audio_hour_usd,
+    )
     preferences = await get_or_create_user_preferences(session, settings)
     book = Book(
         user_id=preferences.user_id,

@@ -328,8 +328,8 @@ async function renderUpload() {
       <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div class="page-range-sliders"><label>From page <output id="start-page-value" for="start-page">1</output><input id="start-page" type="range" min="1" max="1" value="1"></label><label>To page <output id="end-page-value" for="end-page">1</output><input id="end-page" type="range" min="1" max="1" value="1"></label></div><small>Start with a chapter or a sample. You can return later and process more pages from the same uploaded PDF.</small></section>
       <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
       <details class="upload-settings"><summary>PROCESSING SETTINGS <span>Use saved defaults or customise this book</span></summary><div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div></details>
-      <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
-      <p class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
+      <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. total cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
+      <p id="estimate-note" class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
       <button id="start-processing" class="button button--wide" type="submit" disabled>START PROCESSING</button>
     </form>
   `);
@@ -387,8 +387,9 @@ async function renderUpload() {
     if (!response.ok) throw new Error("Unable to calculate estimate");
     const estimate = await response.json();
     document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
-    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_ai_cost_usd.toFixed(2)}`;
+    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
     document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
+    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · based on file size.`;
   };
   const loadUploadedEstimate = async () => {
     if (!uploadedBook) return;
@@ -399,8 +400,9 @@ async function renderUpload() {
     if (!response.ok) throw new Error("Unable to estimate this page range");
     const estimate = await response.json();
     document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
-    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_ai_cost_usd.toFixed(2)}`;
+    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
     document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
+    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · for the selected pages.`;
   };
   const responseError = async (response, fallback) => {
     if (response.status === 429) return "Too many requests. Please wait a minute before trying again.";
@@ -1077,7 +1079,7 @@ async function renderBookPage() {
         const estimateResponse = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/estimate?start_page=${part.global_start_page}&end_page=${partEndPage}`);
         const estimate = estimateResponse.ok ? await estimateResponse.json() : null;
         const estimateText = estimate
-          ? ` Estimated AI cost: $${Number(estimate.estimated_ai_cost_usd).toFixed(4)}; audio: ${formatDuration(Number(estimate.estimated_audio_seconds))}.`
+          ? ` Estimated total: $${Number(estimate.estimated_total_cost_usd).toFixed(4)} (AI $${Number(estimate.estimated_ai_cost_usd).toFixed(4)} + TTS $${Number(estimate.estimated_tts_cost_usd).toFixed(4)}); audio: ${formatDuration(Number(estimate.estimated_audio_seconds))}.`
           : "";
         if (!window.confirm(`Part ${part.sequence} has ${part.page_count} pages.${estimateText} Start processing it now?`)) {
           processingControlNote.textContent = `Part ${part.sequence} is stored and can be processed later.`;
