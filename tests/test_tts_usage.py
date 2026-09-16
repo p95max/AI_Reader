@@ -1,7 +1,7 @@
 import pytest
 
 from app.core.config import Settings
-from app.services.tts_usage import TTSUsageCostCalculator
+from app.services.audio.tts_usage import TTSUsageCostCalculator
 
 
 def test_tts_usage_calculates_external_audio_cost() -> None:

@@ -14,8 +14,8 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.audio_chunk import AudioChunk
-from app.services.audio_generation import wav_duration_milliseconds
-from app.services.storage import get_object_storage
+from app.services.audio.audio_generation import wav_duration_milliseconds
+from app.services.infrastructure.storage import get_object_storage
 
 
 async def repair_book_audio_durations(book_id: UUID) -> int:

@@ -6,7 +6,7 @@ from app.core.config import Settings, get_settings
 from app.models.book import Book
 from app.models.user_preferences import UserPreferences
 from app.schemas.books import NarrationPreferences
-from app.services.ownership import get_local_user_id
+from app.services.books.ownership import get_local_user_id
 
 
 async def get_or_create_user_preferences(

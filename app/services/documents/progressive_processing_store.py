@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.services.progressive_processing import PendingContentChunk
+from app.services.documents.progressive_processing import PendingContentChunk
 
 SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 

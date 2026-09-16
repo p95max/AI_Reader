@@ -1,7 +1,7 @@
 import pytest
 
 from app.core.config import ModelPricing, Settings
-from app.services.book_estimate import (
+from app.services.books.book_estimate import (
     estimate_book_processing,
     estimate_book_processing_with_pricing,
 )

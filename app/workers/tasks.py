@@ -9,22 +9,22 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.services.ai_adapter import AIRequest, OpenAIAdapter, UsageContext
-from app.services.audio_chunk_store import SQLAlchemyAudioChunkStore
-from app.services.audio_generation import AudioChunkGenerator, NarrationChunker
-from app.services.book_structure import BookStructureBuilder
-from app.services.book_structure_processor import BookStructureProcessor
-from app.services.book_structure_store import SQLAlchemyBookStructureStore
-from app.services.narration_validation import validate_narration
-from app.services.pdf_parser import PDFParser, TextBlock
-from app.services.progressive_processing import ProgressiveProcessingPlanner
-from app.services.progressive_processing_coordinator import ProgressiveProcessingCoordinator
-from app.services.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
-from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
-from app.services.storage import get_object_storage
-from app.services.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
-from app.services.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_synthesizer
-from app.services.tts_usage import TTSUsageCostCalculator
+from app.services.ai.ai_adapter import AIRequest, OpenAIAdapter, UsageContext
+from app.services.ai.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
+from app.services.audio.audio_chunk_store import SQLAlchemyAudioChunkStore
+from app.services.audio.audio_generation import AudioChunkGenerator, NarrationChunker
+from app.services.audio.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
+from app.services.audio.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_synthesizer
+from app.services.audio.tts_usage import TTSUsageCostCalculator
+from app.services.documents.book_structure import BookStructureBuilder
+from app.services.documents.book_structure_processor import BookStructureProcessor
+from app.services.documents.book_structure_store import SQLAlchemyBookStructureStore
+from app.services.documents.narration_validation import validate_narration
+from app.services.documents.pdf_parser import PDFParser, TextBlock
+from app.services.documents.progressive_processing import ProgressiveProcessingPlanner
+from app.services.documents.progressive_processing_coordinator import ProgressiveProcessingCoordinator
+from app.services.documents.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
+from app.services.infrastructure.storage import get_object_storage
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)

@@ -164,7 +164,7 @@ class OpenAIAdapter:
             )
         self._client = client
         if usage_reporter is None:
-            from app.services.usage_tracking import PersistentUsageReporter
+            from app.services.books.usage_tracking import PersistentUsageReporter
 
             usage_reporter = PersistentUsageReporter()
         self._usage_reporter = usage_reporter

@@ -36,20 +36,20 @@ from app.schemas.books import (
     PlaybackPositionRead,
     PlaybackPositionUpdate,
 )
-from app.services.book_cost import BookCostService
-from app.services.book_estimate import estimate_book_processing_with_pricing
-from app.services.book_library import build_book_library_item
-from app.services.book_metadata import extract_pdf_book_metadata
-from app.services.book_progress import BookProgressService
-from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
-from app.services.uploads import (
+from app.services.books.book_cost import BookCostService
+from app.services.books.book_estimate import estimate_book_processing_with_pricing
+from app.services.books.book_library import build_book_library_item
+from app.services.books.book_metadata import extract_pdf_book_metadata
+from app.services.books.book_progress import BookProgressService
+from app.services.books.usage_summary import UsageSummaryService
+from app.services.books.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
+from app.services.documents.uploads import (
     InvalidPDFUpload,
     PDFPageLimitExceeded,
     UploadTooLarge,
     persist_pdf_upload,
 )
-from app.services.usage_summary import UsageSummaryService
-from app.services.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
+from app.services.infrastructure.storage import ObjectStorage, ObjectStorageError, get_object_storage
 
 router = APIRouter()
 

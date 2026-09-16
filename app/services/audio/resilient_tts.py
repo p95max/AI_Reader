@@ -6,15 +6,15 @@ import logging
 from time import perf_counter
 from uuid import UUID
 
-from app.services.audio_chunk_store import AudioChunkStore
-from app.services.audio_generation import (
+from app.services.audio.audio_chunk_store import AudioChunkStore
+from app.services.audio.audio_generation import (
     AudioChunkGenerator,
     GeneratedAudioChunk,
     audio_storage_key,
 )
-from app.services.storage import ObjectStorageError
-from app.services.tts import ReadingStyle, SpeechSpeed, TTSError
-from app.services.tts_usage import TTSUsageCostCalculator
+from app.services.audio.tts import ReadingStyle, SpeechSpeed, TTSError
+from app.services.audio.tts_usage import TTSUsageCostCalculator
+from app.services.infrastructure.storage import ObjectStorageError
 
 logger = logging.getLogger(__name__)
 

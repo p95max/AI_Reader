@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
-from app.services.audio_generation import GeneratedAudioChunk
+from app.services.audio.audio_generation import GeneratedAudioChunk
 
 
 class AudioChunkStore(Protocol):

@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.book import BookStatus
 from app.models.chapter import ProcessingStatus
-from app.services.technical_narrator import CodeMode, DiagramMode, FormulaMode, TableMode
-from app.services.tts import ReadingStyle, SpeechSpeed
+from app.services.ai.technical_narrator import CodeMode, DiagramMode, FormulaMode, TableMode
+from app.services.audio.tts import ReadingStyle, SpeechSpeed
 
 
 class BookRead(BaseModel):

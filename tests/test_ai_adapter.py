@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core.config import Settings
-from app.services.ai_adapter import (
+from app.services.ai.ai_adapter import (
     AIRequest,
     AIResponse,
     ImageInput,
@@ -12,7 +12,7 @@ from app.services.ai_adapter import (
     TokenUsage,
     UsageContext,
 )
-from app.services.usage_tracking import PersistentUsageReporter
+from app.services.books.usage_tracking import PersistentUsageReporter
 
 
 class FakeResponses:

@@ -1,4 +1,4 @@
-from app.services.book_metadata import UNKNOWN_AUTHOR, resolve_book_metadata
+from app.services.books.book_metadata import UNKNOWN_AUTHOR, resolve_book_metadata
 
 
 def test_metadata_author_takes_priority_over_cover_text() -> None:

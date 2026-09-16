@@ -4,11 +4,11 @@ from uuid import UUID
 import pytest
 
 from app.core.config import Settings
-from app.services.audio_chunk_store import VoiceMismatchError
-from app.services.audio_generation import GeneratedAudioChunk
-from app.services.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
-from app.services.tts import SpeechSpeed, TTSError
-from app.services.tts_usage import TTSUsageCostCalculator
+from app.services.audio.audio_chunk_store import VoiceMismatchError
+from app.services.audio.audio_generation import GeneratedAudioChunk
+from app.services.audio.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
+from app.services.audio.tts import SpeechSpeed, TTSError
+from app.services.audio.tts_usage import TTSUsageCostCalculator
 
 BOOK_ID = UUID("12345678-1234-5678-1234-567812345678")
 

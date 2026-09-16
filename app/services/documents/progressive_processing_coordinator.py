@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.services.progressive_processing import ProgressivePlan, ProgressiveProcessingPlanner
-from app.services.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
+from app.services.documents.progressive_processing import ProgressivePlan, ProgressiveProcessingPlanner
+from app.services.documents.progressive_processing_store import SQLAlchemyProgressiveProcessingStore
 
 
 class ProgressiveProcessingCoordinator:

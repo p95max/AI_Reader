@@ -2,8 +2,8 @@ from uuid import UUID
 
 import pytest
 
-from app.services.audio_chunk_store import SQLAlchemyAudioChunkStore
-from app.services.audio_generation import GeneratedAudioChunk
+from app.services.audio.audio_chunk_store import SQLAlchemyAudioChunkStore
+from app.services.audio.audio_generation import GeneratedAudioChunk
 
 
 class FakeSession:

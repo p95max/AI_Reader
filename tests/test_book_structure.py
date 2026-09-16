@@ -3,9 +3,9 @@ from uuid import UUID
 import pytest
 
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.services.book_structure import BookStructureBuilder
-from app.services.book_structure_processor import BookStructureProcessor
-from app.services.pdf_parser import ParsedDocument, ParsedPage, TextBlock
+from app.services.documents.book_structure import BookStructureBuilder
+from app.services.documents.book_structure_processor import BookStructureProcessor
+from app.services.documents.pdf_parser import ParsedDocument, ParsedPage, TextBlock
 
 BOOK_ID = UUID("12345678-1234-5678-1234-567812345678")
 

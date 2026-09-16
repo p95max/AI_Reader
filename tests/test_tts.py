@@ -4,8 +4,8 @@ import wave
 import pytest
 
 from app.core.config import get_settings
-from app.services.resilient_tts import AudioChunkProcessingError
-from app.services.tts import (
+from app.services.audio.resilient_tts import AudioChunkProcessingError
+from app.services.audio.tts import (
     OpenAITTSSynthesizer,
     ReadingStyle,
     SpeechRequest,

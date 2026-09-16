@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.services.book_structure import StructuredChapter
+from app.services.documents.book_structure import StructuredChapter
 
 
 class BookStructureStore(Protocol):

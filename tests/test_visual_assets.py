@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pymupdf
 
-from app.services.pdf_parser import VisualBlock
-from app.services.visual_assets import PDFVisualExtractor
+from app.services.ai.visual_assets import PDFVisualExtractor
+from app.services.documents.pdf_parser import VisualBlock
 
 
 def test_visual_extractor_renders_pdf_block_as_png(tmp_path: Path) -> None:

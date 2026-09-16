@@ -5,12 +5,12 @@ from uuid import UUID
 
 import pytest
 
-from app.services.audio_generation import (
+from app.services.audio.audio_generation import (
     AudioChunkGenerator,
     NarrationChunker,
     wav_duration_milliseconds,
 )
-from app.services.tts import AudioResult, SpeechRequest
+from app.services.audio.tts import AudioResult, SpeechRequest
 
 
 def wav_bytes(*, sample_rate: int = 1_000, frames: int = 1_500) -> bytes:

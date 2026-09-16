@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from app.services.pdf_parser import ParsedDocument, TextBlock
+from app.services.documents.pdf_parser import ParsedDocument, TextBlock
 
 
 @dataclass(frozen=True, slots=True)

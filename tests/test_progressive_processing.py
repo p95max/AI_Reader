@@ -2,7 +2,7 @@ from uuid import UUID
 
 import pytest
 
-from app.services.progressive_processing import (
+from app.services.documents.progressive_processing import (
     HIGH_PRIORITY,
     NORMAL_PRIORITY,
     PendingContentChunk,

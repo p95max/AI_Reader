@@ -1,7 +1,7 @@
 import pytest
 
-from app.services.narration_validation import validate_narration
-from app.services.pdf_parser import PDFParser
+from app.services.documents.narration_validation import validate_narration
+from app.services.documents.pdf_parser import PDFParser
 
 
 @pytest.mark.parametrize("text", [

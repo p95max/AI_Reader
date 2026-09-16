@@ -110,14 +110,21 @@ uv run ruff format --check .
 
 ```text
 app/
-  api/v1/       # HTTP-эндпоинты и схемы API
-  core/         # конфигурация приложения
-  db/           # SQLAlchemy engine, сессии и metadata
-  workers/      # Celery application и фоновые задачи
-  models/        # ORM-модели
-  services/      # S3-хранилище и обработка upload
-alembic/        # миграции PostgreSQL
+  api/v1/                   # HTTP endpoints
+  core/                     # configuration, logging, rate limits
+  db/                       # SQLAlchemy engine, sessions, metadata
+  models/                   # ORM entities
+  schemas/                  # HTTP request/response schemas
+  services/
+    ai/                     # LLM adaptation, narration cache, visual narration
+    audio/                  # TTS adapter, audio chunks, resilient generation
+    books/                  # library, metadata, cost, usage, preferences
+    documents/              # PDF parsing, structure, processing plans, uploads
+    infrastructure/         # S3-compatible object storage
+  workers/                  # Celery application and background orchestration
+  web/                      # SPA shell and frontend assets
+alembic/                    # PostgreSQL migrations
 docker-compose.yml
-  main.py       # точка входа FastAPI
+  main.py                    # FastAPI entry point
 tests/          # тесты
 ```

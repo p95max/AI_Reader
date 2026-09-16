@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
-from app.services.book_progress import build_book_progress
+from app.services.books.book_progress import build_book_progress
 
 BOOK_ID = UUID("12345678-1234-5678-1234-567812345678")
 CHAPTER_ONE_ID = UUID("12345678-1234-5678-1234-567812345679")

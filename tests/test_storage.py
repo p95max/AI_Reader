@@ -2,7 +2,7 @@ from pathlib import Path
 
 from botocore.exceptions import ClientError
 
-from app.services.storage import S3Storage
+from app.services.infrastructure.storage import S3Storage
 
 
 class FakeS3Client:

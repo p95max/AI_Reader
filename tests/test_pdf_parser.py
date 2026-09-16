@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pymupdf
 
-from app.services.pdf_parser import PDFParser
+from app.services.documents.pdf_parser import PDFParser
 
 
 class LocalPDFSource:

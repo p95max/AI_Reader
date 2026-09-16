@@ -3,7 +3,7 @@ from uuid import UUID
 from app.models.book import Book, BookStatus
 from app.models.user_preferences import UserPreferences
 from app.schemas.books import UserPreferencesUpdate
-from app.services.user_preferences import apply_preferences_to_book
+from app.services.books.user_preferences import apply_preferences_to_book
 
 
 def make_book() -> Book:

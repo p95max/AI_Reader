@@ -3,9 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageContext, UsageCost
-from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
-from app.services.technical_narrator import (
+from app.services.ai.ai_adapter import AIRequest, AIResponse, TokenUsage, UsageContext, UsageCost
+from app.services.ai.technical_narrator import (
     CodeMode,
     DiagramMode,
     FormulaMode,
@@ -13,7 +12,8 @@ from app.services.technical_narrator import (
     TableMode,
     TechnicalNarrator,
 )
-from app.services.visual_assets import VisualAsset
+from app.services.ai.visual_assets import VisualAsset
+from app.services.documents.pdf_parser import FormulaBlock, TableBlock, TextBlock, VisualBlock
 
 
 @dataclass

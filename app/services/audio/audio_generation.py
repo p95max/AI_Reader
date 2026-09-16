@@ -10,8 +10,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.services.storage import ObjectStorage
-from app.services.tts import ReadingStyle, SpeechRequest, SpeechSpeed, SpeechSynthesizer
+from app.services.audio.tts import ReadingStyle, SpeechRequest, SpeechSpeed, SpeechSynthesizer
+from app.services.infrastructure.storage import ObjectStorage
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…])\s+")
 

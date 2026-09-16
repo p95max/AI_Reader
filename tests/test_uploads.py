@@ -4,7 +4,7 @@ import pymupdf
 import pytest
 from starlette.datastructures import Headers, UploadFile
 
-from app.services.uploads import (
+from app.services.documents.uploads import (
     InvalidPDFUpload,
     PDFPageLimitExceeded,
     UploadTooLarge,

@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
-from app.services.ai_adapter import (
+from app.services.ai.ai_adapter import (
     AIAdapter,
     AIRequest,
     AIResponse,
@@ -14,9 +14,9 @@ from app.services.ai_adapter import (
     UsageContext,
     UsageCost,
 )
-from app.services.narration_cache import NarrationCache
-from app.services.pdf_parser import FormulaBlock, TableBlock, TextBlock
-from app.services.visual_assets import VisualAsset
+from app.services.ai.narration_cache import NarrationCache
+from app.services.ai.visual_assets import VisualAsset
+from app.services.documents.pdf_parser import FormulaBlock, TableBlock, TextBlock
 
 
 class CodeMode(StrEnum):

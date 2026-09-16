@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.schemas.books import UserPreferencesRead, UserPreferencesUpdate
-from app.services.user_preferences import get_or_create_user_preferences
+from app.services.books.user_preferences import get_or_create_user_preferences
 
 router = APIRouter()
 

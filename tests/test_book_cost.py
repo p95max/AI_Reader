@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.book import Book
-from app.services.book_cost import BookCostService
+from app.services.books.book_cost import BookCostService
 
 
 class FakeResult:

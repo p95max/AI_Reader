@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pymupdf
 
-from app.services.pdf_parser import VisualBlock
+from app.services.documents.pdf_parser import VisualBlock
 
 
 class VisualExtractionError(RuntimeError):

@@ -4,7 +4,7 @@ import pytest
 
 from app.models.book import Book, BookStatus
 from app.schemas.books import BookLibraryItemRead
-from app.services.book_library import build_book_library_item
+from app.services.books.book_library import build_book_library_item
 
 
 def book(status: BookStatus) -> Book:

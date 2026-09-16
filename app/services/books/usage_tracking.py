@@ -17,7 +17,7 @@ from app.models.chapter import Chapter, ContentChunk
 from app.models.llm_usage import LLMUsageRecord
 
 if TYPE_CHECKING:
-    from app.services.ai_adapter import AIRequest, AIResponse
+    from app.services.ai.ai_adapter import AIRequest, AIResponse
 
 
 class UsageRecordStore(Protocol):

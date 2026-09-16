@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.services.book_structure import BookStructureBuilder, StructuredChapter
-from app.services.book_structure_store import BookStructureStore
-from app.services.pdf_parser import ParsedDocument
+from app.services.documents.book_structure import BookStructureBuilder, StructuredChapter
+from app.services.documents.book_structure_store import BookStructureStore
+from app.services.documents.pdf_parser import ParsedDocument
 
 
 class BookStructureProcessor:
