@@ -44,6 +44,18 @@ The default synthesis model is OpenAI `gpt-4o-mini-tts`. Set
 The TTS worker performs at most two concurrent requests
 (`AI_READER_TTS_WORKER_CONCURRENCY`).
 
+### Current cost limitation and planned local TTS
+
+External TTS is convenient and fast to operate, but it is currently expensive
+for long books: the planning rate is close to **$1 per generated audio hour**.
+That makes full-book narration costly even when LLM processing costs are low.
+
+The next planned TTS backend is a local Qwen model. It will be offered as an
+alternative to OpenAI TTS so that deployments with suitable hardware can trade
+GPU/CPU capacity for a substantially lower marginal cost. The current Docker
+image intentionally remains external-TTS-only; it does not download or bundle
+Qwen yet.
+
 The upload UI returns an approximate pre-processing total. It includes the LLM
 estimate and an estimated TTS cost based on
 `AI_READER_TTS_EXTERNAL_COST_PER_AUDIO_HOUR_USD`. OpenAI bills TTS by text and
