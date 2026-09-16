@@ -25,6 +25,8 @@ class ObjectStorage(Protocol):
 
     def delete_file(self, key: str) -> None: ...
 
+    def delete_prefix(self, prefix: str) -> None: ...
+
 
 class S3Storage:
     def __init__(self, client: BaseClient | None = None) -> None:
@@ -80,6 +82,29 @@ class S3Storage:
             self.client.delete_object(Bucket=self.bucket_name, Key=key)
         except (ClientError, BotoCoreError) as error:
             raise ObjectStorageError("Unable to delete the stored file") from error
+
+    def delete_prefix(self, prefix: str) -> None:
+        """Remove every object for one deleted book, including untracked leftovers."""
+        try:
+            continuation_token: str | None = None
+            while True:
+                request: dict[str, str] = {"Bucket": self.bucket_name, "Prefix": prefix}
+                if continuation_token is not None:
+                    request["ContinuationToken"] = continuation_token
+                response = self.client.list_objects_v2(**request)
+                objects = [{"Key": item["Key"]} for item in response.get("Contents", [])]
+                if objects:
+                    self.client.delete_objects(
+                        Bucket=self.bucket_name,
+                        Delete={"Objects": objects, "Quiet": True},
+                    )
+                if not response.get("IsTruncated"):
+                    return
+                continuation_token = response.get("NextContinuationToken")
+                if not continuation_token:
+                    return
+        except (ClientError, BotoCoreError) as error:
+            raise ObjectStorageError("Unable to remove stored book data") from error
 
     def download_file(self, key: str, destination: Path) -> None:
         try:

@@ -325,7 +325,7 @@ async function renderUpload() {
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
       <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
-      <div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div>
+      <details class="upload-settings"><summary>PROCESSING SETTINGS <span>Use saved defaults or customise this book</span></summary><div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div></details>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
       <p class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
       <button id="start-processing" class="button button--wide" type="submit" disabled>START PROCESSING</button>
@@ -347,6 +347,19 @@ async function renderUpload() {
   let diagramMode = "describe";
   let formulaMode = "explain";
   const maxPdfSizeBytes = 100 * 1024 * 1024;
+  const appendParameterHelp = (element, text) => {
+    const hint = document.createElement("small");
+    hint.className = "parameter-help";
+    hint.textContent = text;
+    element.insertAdjacentElement("afterend", hint);
+  };
+  appendParameterHelp(document.querySelector("#mode-buttons"), "How code blocks are narrated: explain concepts, read literal code, skip it, or use a balanced hybrid.");
+  appendParameterHelp(document.querySelector("#table-mode-buttons"), "Summarise table insights, read every cell, or skip tables.");
+  appendParameterHelp(document.querySelector("#diagram-mode-buttons"), "Describe visual content in words, or omit it from narration.");
+  appendParameterHelp(document.querySelector("#formula-mode-buttons"), "Explain notation, read symbols aloud, or skip formulas.");
+  appendParameterHelp(voiceSetting.closest("label"), "Sets the narrator voice for this book's newly generated audio.");
+  appendParameterHelp(speedSetting.closest("label"), "Normal is natural pacing; Slow improves clarity for dense material.");
+  appendParameterHelp(document.querySelector("#style-buttons"), "Calm is measured, Neutral is balanced, and Expressive adds more variation.");
 
   const formatBytes = (bytes) => {
     if (bytes < 1_024) return `${bytes} B`;
@@ -488,6 +501,19 @@ async function renderSettings() {
   const usageStatus = document.querySelector("#settings-usage-status");
   const usageContent = document.querySelector("#settings-usage-content");
   let usageLoaded = false;
+  const appendParameterHelp = (element, text) => {
+    const hint = document.createElement("small");
+    hint.className = "parameter-help";
+    hint.textContent = text;
+    element.insertAdjacentElement("afterend", hint);
+  };
+  appendParameterHelp(form.querySelector('[name="voice"]').closest("label"), "Sets the narrator voice for newly generated audio.");
+  appendParameterHelp(form.querySelector('[name="speed"]').closest("label"), "Normal is natural pacing; Slow improves clarity for dense material.");
+  appendParameterHelp(form.querySelector('[name="style"]').closest("label"), "Calm is measured, Neutral is balanced, and Expressive adds more variation.");
+  appendParameterHelp(form.querySelector('[name="code_mode"]').closest("label"), "Explain concepts, read literal code, skip it, or use a balanced hybrid.");
+  appendParameterHelp(form.querySelector('[name="table_mode"]').closest("label"), "Summarise table insights, read every cell, or skip tables.");
+  appendParameterHelp(form.querySelector('[name="diagram_mode"]').closest("label"), "Describe visual content in words, or omit it from narration.");
+  appendParameterHelp(form.querySelector('[name="formula_mode"]').closest("label"), "Explain notation, read symbols aloud, or skip formulas.");
   const formatCost = (value) => `$${Number(value || 0).toFixed(4)}`;
   const formatAddedDate = (value) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
   const renderUsageSummary = (summary) => {

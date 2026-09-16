@@ -151,6 +151,10 @@ class AudioChunkGenerator:
             tts_model=self.tts_model,
         )
 
+    def delete_chunk(self, storage_key: str) -> None:
+        """Compensate for an upload whose database checkpoint could not be saved."""
+        self._storage.delete_file(storage_key)
+
 
 def audio_storage_key(book_id: UUID, chunk_index: int) -> str:
     if chunk_index < 0:

@@ -12,6 +12,8 @@ class FakeS3Client:
         self.deleted: list[tuple[str, str]] = []
         self.downloads: list[tuple[str, str, str]] = []
         self.puts: list[tuple[str, str, bytes, str]] = []
+        self.prefix_objects: list[str] = []
+        self.prefix_deletions: list[tuple[str, list[str]]] = []
 
     def head_bucket(self, *, Bucket: str) -> None:
         if not self.bucket_created:
@@ -25,6 +27,16 @@ class FakeS3Client:
 
     def delete_object(self, *, Bucket: str, Key: str) -> None:
         self.deleted.append((Bucket, Key))
+
+    def list_objects_v2(self, *, Bucket: str, Prefix: str, **_kwargs: str) -> dict[str, object]:
+        return {
+            "Contents": [{"Key": key} for key in self.prefix_objects if key.startswith(Prefix)],
+            "IsTruncated": False,
+        }
+
+    def delete_objects(self, *, Bucket: str, Delete: dict[str, object]) -> None:
+        keys = [item["Key"] for item in Delete["Objects"]]  # type: ignore[index]
+        self.prefix_deletions.append((Bucket, keys))
 
     def download_file(self, bucket: str, key: str, destination: str) -> None:
         self.downloads.append((bucket, key, destination))
@@ -72,6 +84,30 @@ def test_s3_storage_uploads_generated_audio_bytes() -> None:
 
     assert client.puts == [
         (storage.bucket_name, "books/book-id/audio/000000.wav", b"audio", "audio/wav")
+    ]
+
+
+def test_s3_storage_deletes_every_object_under_book_prefix() -> None:
+    client = FakeS3Client()
+    client.prefix_objects = [
+        "books/book-id/original.pdf",
+        "books/book-id/audio/000000.wav",
+        "books/book-id/audio/orphan.wav",
+        "books/other/audio/000000.wav",
+    ]
+    storage = S3Storage(client=client)  # type: ignore[arg-type]
+
+    storage.delete_prefix("books/book-id/")
+
+    assert client.prefix_deletions == [
+        (
+            storage.bucket_name,
+            [
+                "books/book-id/original.pdf",
+                "books/book-id/audio/000000.wav",
+                "books/book-id/audio/orphan.wav",
+            ],
+        )
     ]
 
 

@@ -40,6 +40,9 @@ def test_frontend_assets_are_served() -> None:
     assert 'id="open-chapters"' in response.text
     assert "up to 100 MB and 500 pages" in response.text
     assert "WHAT HAPPENS NEXT" in response.text
+    assert "PROCESSING SETTINGS" in response.text
+    assert 'class="upload-settings"' in response.text
+    assert "How code blocks are narrated" in response.text
     assert '["/player", "player", "Player"]' not in response.text
 
 

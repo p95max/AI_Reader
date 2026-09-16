@@ -100,16 +100,28 @@ class ResilientTTSProcessor:
                     generation_time_milliseconds=elapsed_ms,
                 )
                 tts_cost_usd = usage.total_cost_usd
-            await self._store.mark_ready(
-                book_id,
-                chunk,
-                voice=voice,
-                tts_provider=chunk.tts_provider,
-                tts_model=chunk.tts_model,
-                attempt_count=attempt_count,
-                generation_time_milliseconds=elapsed_ms,
-                tts_cost_usd=tts_cost_usd,
-            )
+            try:
+                await self._store.mark_ready(
+                    book_id,
+                    chunk,
+                    voice=voice,
+                    tts_provider=chunk.tts_provider,
+                    tts_model=chunk.tts_model,
+                    attempt_count=attempt_count,
+                    generation_time_milliseconds=elapsed_ms,
+                    tts_cost_usd=tts_cost_usd,
+                )
+            except Exception:
+                # A deletion or database failure between upload and checkpoint
+                # must not leave an object with no AudioChunk record.
+                try:
+                    self._generator.delete_chunk(chunk.storage_key)
+                except ObjectStorageError:
+                    logger.exception(
+                        "tts_orphan_cleanup_failed",
+                        extra={"book_id": str(book_id), "chunk": chunk_index},
+                    )
+                raise
             logger.info(
                 "tts_chunk_generated",
                 extra={

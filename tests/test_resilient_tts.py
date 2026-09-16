@@ -19,6 +19,7 @@ class FakeGenerator:
         self.generated_indexes: list[int] = []
         self.tts_provider = "openai"
         self.tts_model = "gpt-4o-mini-tts"
+        self.deleted_storage_keys: list[str] = []
 
     def split_narration(self, _narration: str) -> list[str]:
         return ["Первый chunk.", "Второй chunk."]
@@ -37,6 +38,9 @@ class FakeGenerator:
             duration_milliseconds=1_000,
         )
 
+    def delete_chunk(self, storage_key: str) -> None:
+        self.deleted_storage_keys.append(storage_key)
+
 
 class MemoryCheckpointStore:
     def __init__(self, *, ready: set[int] | None = None, voice: str | None = None) -> None:
@@ -44,6 +48,7 @@ class MemoryCheckpointStore:
         self.voice = voice
         self.ready_calls: list[tuple[GeneratedAudioChunk, str, int, int, float]] = []
         self.failed_calls: list[dict[str, object]] = []
+        self.fail_mark_ready = False
 
     async def ensure_voice(self, _book_id: UUID, voice: str) -> None:
         if self.voice is not None and self.voice != voice:
@@ -65,6 +70,8 @@ class MemoryCheckpointStore:
         generation_time_milliseconds: int,
         tts_cost_usd: float,
     ) -> None:
+        if self.fail_mark_ready:
+            raise RuntimeError("database checkpoint failed")
         self.ready.add(chunk.chunk_index)
         self.ready_calls.append(
             (chunk, voice, attempt_count, generation_time_milliseconds, tts_cost_usd)
@@ -151,3 +158,22 @@ async def test_voice_mismatch_blocks_new_audio_generation() -> None:
         )
 
     assert generator.generated_indexes == []
+
+
+@pytest.mark.asyncio
+async def test_failed_checkpoint_removes_uploaded_audio_object() -> None:
+    generator = FakeGenerator()
+    store = MemoryCheckpointStore()
+    store.fail_mark_ready = True
+    processor = ResilientTTSProcessor(generator, store)  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError, match="database checkpoint failed"):
+        await processor.process(
+            BOOK_ID,
+            "narration",
+            voice="Narrator",
+            speed=SpeechSpeed.NORMAL,
+            attempt_count=1,
+        )
+
+    assert generator.deleted_storage_keys == [f"books/{BOOK_ID}/audio/000000.wav"]
