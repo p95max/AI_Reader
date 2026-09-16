@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.session import get_db_session
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book, BookStatus
@@ -41,7 +42,12 @@ from app.services.book_library import build_book_library_item
 from app.services.book_metadata import extract_pdf_book_metadata
 from app.services.book_progress import BookProgressService
 from app.services.storage import ObjectStorage, ObjectStorageError, get_object_storage
-from app.services.uploads import InvalidPDFUpload, UploadTooLarge, persist_pdf_upload
+from app.services.uploads import (
+    InvalidPDFUpload,
+    PDFPageLimitExceeded,
+    UploadTooLarge,
+    persist_pdf_upload,
+)
 from app.services.usage_summary import UsageSummaryService
 from app.services.user_preferences import apply_preferences_to_book, get_or_create_user_preferences
 
@@ -326,7 +332,9 @@ async def get_book_progress(
 
 
 @router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit(get_settings().upload_rate_limit)
 async def create_book(
+    request: Request,
     file: Annotated[UploadFile, File(description="Technical PDF to process")],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
@@ -340,7 +348,11 @@ async def create_book(
 
     settings = get_settings()
     try:
-        temporary_path, size_bytes = await persist_pdf_upload(file, settings.max_pdf_size_bytes)
+        temporary_path, size_bytes = await persist_pdf_upload(
+            file,
+            settings.max_pdf_size_bytes,
+            settings.max_pdf_pages,
+        )
     except InvalidPDFUpload as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -352,9 +364,18 @@ async def create_book(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"PDF exceeds the {limit_mb} MB limit",
         ) from error
+    except PDFPageLimitExceeded as error:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"PDF exceeds the {settings.max_pdf_pages}-page limit",
+        ) from error
 
     filename = _normalized_filename(file)
-    extracted_metadata = await run_in_threadpool(extract_pdf_book_metadata, temporary_path, filename)
+    extracted_metadata = await run_in_threadpool(
+        extract_pdf_book_metadata,
+        temporary_path,
+        filename,
+    )
     pricing = settings.pricing_for_model()
     estimate = estimate_book_processing_with_pricing(size_bytes, pricing=pricing)
     preferences = await get_or_create_user_preferences(session, settings)
@@ -397,8 +418,10 @@ async def create_book(
 
 
 @router.post("/{book_id}/process", response_model=BookRead, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(get_settings().process_rate_limit)
 async def start_book_processing(
     book_id: UUID,
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     payload: BookTTSSettingsUpdate | None = None,
 ) -> Book:

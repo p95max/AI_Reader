@@ -322,8 +322,9 @@ async function renderUpload() {
     <header class="topbar"><span>Web / Desktop (Add Book)</span><span>◉ USER⌄</span></header>
     <form id="upload-form" class="feature-page add-book-page">
       <a class="back-link" href="/library">← Library</a><h1>ADD BOOK</h1><p>Turn your technical PDF into an audiobook.</p>
-      <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>Max 200 MB · PDF only</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
+      <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
+      <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
       <div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
       <p class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
@@ -345,6 +346,7 @@ async function renderUpload() {
   let tableMode = "summarize";
   let diagramMode = "describe";
   let formulaMode = "explain";
+  const maxPdfSizeBytes = 100 * 1024 * 1024;
 
   const formatBytes = (bytes) => {
     if (bytes < 1_024) return `${bytes} B`;
@@ -364,10 +366,22 @@ async function renderUpload() {
     document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_ai_cost_usd.toFixed(2)}`;
     document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
   };
+  const responseError = async (response, fallback) => {
+    if (response.status === 429) return "Too many requests. Please wait a minute before trying again.";
+    const payload = await response.json().catch(() => null);
+    return payload?.detail || fallback;
+  };
   const selectFile = async (selected) => {
     if (!selected) return;
     if (selected.type !== "application/pdf" && !selected.name.toLowerCase().endsWith(".pdf")) {
       statusMessage.textContent = "Please choose a PDF file.";
+      return;
+    }
+    if (selected.size > maxPdfSizeBytes) {
+      file = null;
+      selectedFile.textContent = `${selected.name} · ${formatBytes(selected.size)}`;
+      statusMessage.textContent = "This PDF is larger than the 100 MB upload limit.";
+      startButton.disabled = true;
       return;
     }
     file = selected;
@@ -439,7 +453,7 @@ async function renderUpload() {
       const data = new FormData();
       data.append("file", file);
       const upload = await fetch("/api/v1/books", { method: "POST", body: data });
-      if (!upload.ok) throw new Error(await upload.text());
+      if (!upload.ok) throw new Error(await responseError(upload, "Upload failed. Please try again."));
       const book = await upload.json();
       statusMessage.textContent = "Starting processing…";
       const processing = await fetch(`/api/v1/books/${book.id}/process`, {
@@ -447,11 +461,11 @@ async function renderUpload() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voice: voiceSetting.value, speed: speedSetting.value, style: readingStyle, code_mode: codeMode, table_mode: tableMode, diagram_mode: diagramMode, formula_mode: formulaMode }),
       });
-      if (!processing.ok) throw new Error(await processing.text());
+      if (!processing.ok) throw new Error(await responseError(processing, "Processing could not be started."));
       window.location.assign(`/books/${book.id}`);
     } catch (error) {
       startButton.disabled = false;
-      statusMessage.textContent = "Upload failed. Please try again.";
+      statusMessage.textContent = error.message || "Upload failed. Please try again.";
     }
   });
 }

@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     s3_bucket_name: str = "ai-reader"
     s3_region_name: str = "us-east-1"
     max_pdf_size_bytes: int = 100 * 1024 * 1024
+    max_pdf_pages: int = Field(default=500, ge=1)
+    upload_rate_limit: str = "5/minute"
+    process_rate_limit: str = "10/minute"
     openai_api_key: SecretStr | None = None
     ai_model: str = "gpt-5.6-luna"
     ai_timeout_seconds: float = Field(default=45.0, gt=0)

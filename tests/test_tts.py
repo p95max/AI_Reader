@@ -13,7 +13,7 @@ from app.services.tts import (
     speech_instruction,
 )
 from app.workers.celery_app import celery_app
-from app.workers.tasks import generate_audio_chunks
+from app.workers.tasks import _is_final_attempt, generate_audio_chunks
 
 
 class FakeOpenAIResponse:
@@ -97,6 +97,27 @@ def test_chunk_generation_retries_only_retryable_failures() -> None:
     assert generate_audio_chunks.autoretry_for == (AudioChunkProcessingError,)
     assert generate_audio_chunks.retry_kwargs == {"max_retries": 2}
     assert generate_audio_chunks.retry_backoff is True
+
+
+def test_retryable_chunk_is_only_failed_after_its_last_attempt() -> None:
+    assert not _is_final_attempt(
+        retries=0,
+        max_attempts=3,
+        error=TimeoutError(),
+        retryable_errors=(TimeoutError,),
+    )
+    assert _is_final_attempt(
+        retries=2,
+        max_attempts=3,
+        error=TimeoutError(),
+        retryable_errors=(TimeoutError,),
+    )
+    assert _is_final_attempt(
+        retries=0,
+        max_attempts=3,
+        error=ValueError(),
+        retryable_errors=(TimeoutError,),
+    )
 
 
 def test_empty_speech_is_rejected() -> None:

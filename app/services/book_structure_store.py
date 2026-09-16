@@ -7,11 +7,10 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.audio_chunk import AudioChunk
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.services.book_structure import StructuredChapter
 
@@ -24,20 +23,26 @@ SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
 
 class SQLAlchemyBookStructureStore:
-    """Atomically replaces a book's structure and creates its durable queued work."""
+    """Creates a book structure once, without invalidating completed audio."""
 
     def __init__(self, session_factory: SessionFactory = SessionLocal) -> None:
         self._session_factory = session_factory
 
     async def replace(self, book_id: UUID, chapters: tuple[StructuredChapter, ...]) -> None:
         async with self._session_factory() as session:
-            chapter_ids = select(Chapter.id).where(Chapter.book_id == book_id)
-            # A fresh parse invalidates every earlier narration/audio segment.
-            await session.execute(delete(AudioChunk).where(AudioChunk.book_id == book_id))
+            # Protect against concurrent/redelivered parser jobs.  The lock is
+            # held only while the durable checkpoint is written, not while the
+            # PDF is being parsed.
             await session.execute(
-                delete(ContentChunk).where(ContentChunk.chapter_id.in_(chapter_ids))
+                text("SELECT pg_advisory_xact_lock(hashtext(CAST(:book_id AS text)))"),
+                {"book_id": str(book_id)},
             )
-            await session.execute(delete(Chapter).where(Chapter.book_id == book_id))
+            existing_chapter_id = await session.scalar(
+                select(Chapter.id).where(Chapter.book_id == book_id).limit(1)
+            )
+            if existing_chapter_id is not None:
+                await session.commit()
+                return
 
             for structured_chapter in chapters:
                 chapter = Chapter(

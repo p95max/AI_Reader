@@ -2,6 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import pymupdf
 from fastapi import UploadFile
 
 
@@ -13,8 +14,16 @@ class UploadTooLarge(ValueError):
     """Raised when an upload exceeds the configured maximum size."""
 
 
-async def persist_pdf_upload(upload: UploadFile, max_size_bytes: int) -> tuple[Path, int]:
-    """Stream a PDF upload to a temporary file and validate its size and signature."""
+class PDFPageLimitExceeded(ValueError):
+    """Raised when a PDF contains more pages than the service accepts."""
+
+
+async def persist_pdf_upload(
+    upload: UploadFile,
+    max_size_bytes: int,
+    max_pages: int,
+) -> tuple[Path, int]:
+    """Stream a PDF upload and verify its real format, size, and page count."""
     descriptor, raw_path = tempfile.mkstemp(suffix=".pdf")
     path = Path(raw_path)
     size_bytes = 0
@@ -38,5 +47,18 @@ async def persist_pdf_upload(upload: UploadFile, max_size_bytes: int) -> tuple[P
     if not signature.startswith(b"%PDF-"):
         path.unlink(missing_ok=True)
         raise InvalidPDFUpload
+
+    try:
+        with pymupdf.open(path) as document:
+            if not document.page_count:
+                raise InvalidPDFUpload
+            if document.page_count > max_pages:
+                raise PDFPageLimitExceeded
+    except (pymupdf.FileDataError, RuntimeError, OSError) as error:
+        path.unlink(missing_ok=True)
+        raise InvalidPDFUpload from error
+    except PDFPageLimitExceeded:
+        path.unlink(missing_ok=True)
+        raise
 
     return path, size_bytes

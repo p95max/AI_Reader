@@ -41,8 +41,19 @@ def build_book_structure(book_id: str) -> dict[str, int | str]:
 async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:
     async with SessionLocal() as session:
         book = await session.get(Book, book_id)
+        existing_chapter_id = await session.scalar(
+            select(Chapter.id).where(Chapter.book_id == book_id).limit(1)
+        )
     if book is None:
         raise ValueError(f"Book {book_id} was not found")
+
+    # Celery may redeliver a completed task after a worker restart.  Replacing
+    # the structure here would also delete the completed audio checkpoints.
+    # Keep the durable structure and only ask the planner to continue chunks
+    # that are genuinely still queued.
+    if existing_chapter_id is not None:
+        plan_book_processing.apply_async(args=[str(book_id)], queue="processing")
+        return {"book_id": str(book_id), "status": "already_built"}
 
     document = PDFParser().parse_stored_pdf(get_object_storage(), book.storage_key)
     chapters = await BookStructureProcessor(
@@ -98,8 +109,14 @@ def narrate_content_chunk(self, content_chunk_id: str) -> dict[str, str]:
     async def run():
         try:
             return await _narrate_content_chunk(UUID(content_chunk_id))
-        except Exception:
-            await _mark_content_chunk_failed(UUID(content_chunk_id))
+        except Exception as error:
+            if _is_final_attempt(
+                self.request.retries,
+                get_settings().ai_max_attempts,
+                error,
+                retryable_errors=(ConnectionError, TimeoutError),
+            ):
+                await _mark_content_chunk_failed(UUID(content_chunk_id))
             raise
     return asyncio.run(run())
 
@@ -226,8 +243,20 @@ def synthesize_content_chunk(self, content_chunk_id: str, narration: str) -> dic
             )
         )
     except AudioChunkProcessingError:
-        asyncio.run(_mark_content_chunk_failed(UUID(content_chunk_id)))
+        if self.request.retries >= get_settings().tts_max_attempts - 1:
+            asyncio.run(_mark_content_chunk_failed(UUID(content_chunk_id)))
         raise
+
+
+def _is_final_attempt(
+    retries: int,
+    max_attempts: int,
+    error: Exception,
+    *,
+    retryable_errors: tuple[type[Exception], ...],
+) -> bool:
+    """Only surface failure after a retryable chunk has exhausted its budget."""
+    return not isinstance(error, retryable_errors) or retries >= max_attempts - 1
 
 
 async def _synthesize_content_chunk(

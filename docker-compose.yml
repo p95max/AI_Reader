@@ -15,6 +15,9 @@ x-app-environment: &app-environment
   AI_READER_S3_BUCKET_NAME: ${AI_READER_S3_BUCKET_NAME:-ai-reader}
   AI_READER_S3_REGION_NAME: ${AI_READER_S3_REGION_NAME:-us-east-1}
   AI_READER_MAX_PDF_SIZE_BYTES: ${AI_READER_MAX_PDF_SIZE_BYTES:-104857600}
+  AI_READER_MAX_PDF_PAGES: ${AI_READER_MAX_PDF_PAGES:-500}
+  AI_READER_UPLOAD_RATE_LIMIT: ${AI_READER_UPLOAD_RATE_LIMIT:-5/minute}
+  AI_READER_PROCESS_RATE_LIMIT: ${AI_READER_PROCESS_RATE_LIMIT:-10/minute}
   AI_READER_OPENAI_API_KEY: ${AI_READER_OPENAI_API_KEY:-}
   AI_READER_AI_MODEL: ${AI_READER_AI_MODEL:-gpt-5.6-luna}
   AI_READER_AI_TIMEOUT_SECONDS: ${AI_READER_AI_TIMEOUT_SECONDS:-45}
@@ -131,7 +134,7 @@ services:
   worker-processing:
     <<: [*app-image, *app-code]
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --concurrency=2 --loglevel=INFO" /app/app
+    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --concurrency=2 --prefetch-multiplier=1 --loglevel=INFO" /app/app
     depends_on:
       migrate:
         condition: service_completed_successfully
