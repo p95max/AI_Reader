@@ -6,7 +6,7 @@ import structlog
 from sqlalchemy import and_, func, or_, select, update
 
 from app.core.config import get_settings
-from app.core.reading_language import narration_language_instruction
+from app.core.reading_language import narration_language_instruction, preserves_source_language
 from app.db.session import SessionLocal
 from app.models.book import Book, BookStatus
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
@@ -191,6 +191,7 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
         chapter_id=chapter.id,
         content_chunk_id=content_chunk.id,
     )
+    narration: str
     if content_chunk.kind == "code" and PDFParser.code_pattern.search(content_chunk.source_text):
         response = await TechnicalNarrator(OpenAIAdapter()).narrate_code(
             # The structure builder has already classified this as source code.
@@ -208,6 +209,12 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
             ),
             usage_context=context,
         )
+        narration = response.text
+    elif preserves_source_language(book.reading_language):
+        # The OpenAI TTS model speaks the supplied language itself. For Auto-detect,
+        # sending ordinary prose to the LLM would only duplicate the text, add cost,
+        # and slow the first playable segment.
+        narration = content_chunk.source_text
     else:
         response = await OpenAIAdapter().generate(
             AIRequest(
@@ -223,9 +230,10 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
                 usage_context=context,
             )
         )
-    validate_narration(response.text)
+        narration = response.text
+    validate_narration(narration)
     synthesize_content_chunk.apply_async(
-        args=[str(content_chunk.id), response.text], queue="tts"
+        args=[str(content_chunk.id), narration], queue="tts"
     )
     logger.info(
         "book_processing_stage_finished",

@@ -27,3 +27,8 @@ def narration_language_instruction(language: ReadingLanguage | str) -> str:
         ReadingLanguage.GERMAN: "German",
     }[selected]
     return f"Produce the narration in {language_name}, translating the source when necessary."
+
+
+def preserves_source_language(language: ReadingLanguage | str) -> bool:
+    """Whether ordinary prose can bypass the LLM and go straight to TTS."""
+    return ReadingLanguage(language) is ReadingLanguage.AUTO

@@ -104,6 +104,47 @@ def test_builder_ignores_standalone_page_numbers() -> None:
     ]
 
 
+def test_builder_batches_adjacent_prose_blocks_on_the_same_page() -> None:
+    document = ParsedDocument(
+        page_count=1,
+        pages=(
+            page(
+                1,
+                block(1, "Chapter I", heading=True),
+                block(1, "First paragraph."),
+                block(1, "Second paragraph."),
+            ),
+        ),
+    )
+
+    chapters = BookStructureBuilder().build(document)
+
+    assert [chunk.source_text for chunk in chapters[0].chunks] == [
+        "First paragraph. Second paragraph."
+    ]
+
+
+def test_builder_skips_project_gutenberg_wrapper_and_license() -> None:
+    document = ParsedDocument(
+        page_count=4,
+        pages=(
+            page(1, block(1, "*** START OF THE PROJECT GUTENBERG EBOOK Test ***")),
+            page(2, block(2, "THE TABLE", heading=True), block(2, "Chapter 1 Contents")),
+            page(3, block(3, "CHAPTER I", heading=True), block(3, "Main book text.")),
+            page(
+                4,
+                block(4, "*** END OF THE PROJECT GUTENBERG EBOOK Test ***"),
+                block(4, "License"),
+            ),
+        ),
+    )
+
+    chapters = BookStructureBuilder().build(document)
+
+    assert [(chapter.title, chapter.start_page) for chapter in chapters] == [("CHAPTER I", 3)]
+    assert chapters[0].chunks[0].source_text == "Main book text."
+
+
 def test_builder_drops_empty_cover_headings_and_malformed_text() -> None:
     document = ParsedDocument(
         page_count=1,
