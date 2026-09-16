@@ -626,7 +626,7 @@ function formatPlaybackTime(seconds) {
 async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div></section>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div><div class="append-part"><label>Add continuation PDF <input id="append-part-file" type="file" accept="application/pdf"></label><button type="button" id="append-part">ADD PART</button></div></section>
     <div class="player-workspace"><div class="player-main"><section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section></div>
     <div id="chapters-backdrop" class="chapters-backdrop" hidden></div><aside id="chapter-navigation" class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button><button type="button" id="close-chapters" class="close-chapters" aria-label="Close chapters">×</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></aside></div>
     <details class="usage-panel" id="usage-panel" open><summary><span><h2>USAGE &amp; COST</h2><small>Live processing totals</small></span><b aria-hidden="true">⌄</b></summary><div class="usage-grid"><article class="usage-card"><span>AI TOKENS</span><b id="usage-tokens">—</b><small id="usage-token-detail">Input / output</small></article><article class="usage-card"><span>AI COST</span><b id="usage-ai-cost">—</b><small id="usage-ai-requests">LLM requests</small></article><article class="usage-card"><span>GENERATED AUDIO</span><b id="usage-audio-duration">—</b><small id="usage-generation-time">Generation time</small></article><article class="usage-card"><span>TTS COST</span><b id="usage-tts-cost">—</b><small>Generated audio and GPU</small></article><article class="usage-card usage-card--total"><span>TOTAL COST</span><b id="usage-total-cost">—</b><small>AI adaptation + TTS</small></article></div><p id="usage-note">Loading usage data…</p></details>
@@ -677,6 +677,8 @@ async function renderBookPage() {
   const cancelProcessing = document.querySelector("#cancel-processing");
   const extendEndPage = document.querySelector("#extend-end-page");
   const extendProcessing = document.querySelector("#extend-processing");
+  const appendPartFile = document.querySelector("#append-part-file");
+  const appendPart = document.querySelector("#append-part");
   let chunks = [];
   let currentChunk = 0;
   let chapters = [];
@@ -1007,6 +1009,7 @@ async function renderBookPage() {
       processingControlNote.textContent = paused ? "Processing is paused. Ready audio remains available." : `Pages ${current.processing_start_page}–${current.processing_end_page} of ${current.page_count} are selected.`;
       pauseProcessing.hidden = paused;
       resumeProcessing.hidden = !paused;
+      extendEndPage.max = String(current.page_count);
       extendEndPage.value = String(current.processing_end_page);
     };
     updateProcessingControls(book);
@@ -1034,6 +1037,36 @@ async function renderBookPage() {
       const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/process`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(processPayload(extendEndPage.value)) });
       if (!response.ok) return;
       updateProcessingControls(await response.json());
+    });
+    appendPart.addEventListener("click", async () => {
+      const file = appendPartFile.files[0];
+      if (!file) { processingControlNote.textContent = "Choose the next PDF before adding a part."; return; }
+      appendPart.disabled = true;
+      processingControlNote.textContent = "Uploading continuation PDF…";
+      try {
+        const data = new FormData();
+        data.append("file", file);
+        const upload = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/parts`, { method: "POST", body: data });
+        if (!upload.ok) throw new Error("Unable to add continuation PDF");
+        const part = await upload.json();
+        const partEndPage = part.global_start_page + part.page_count - 1;
+        const estimateResponse = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/estimate?start_page=${part.global_start_page}&end_page=${partEndPage}`);
+        const estimate = estimateResponse.ok ? await estimateResponse.json() : null;
+        const estimateText = estimate
+          ? ` Estimated AI cost: $${Number(estimate.estimated_ai_cost_usd).toFixed(4)}; audio: ${formatDuration(Number(estimate.estimated_audio_seconds))}.`
+          : "";
+        if (!window.confirm(`Part ${part.sequence} has ${part.page_count} pages.${estimateText} Start processing it now?`)) {
+          processingControlNote.textContent = `Part ${part.sequence} is stored and can be processed later.`;
+          return;
+        }
+        const process = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/parts/${encodeURIComponent(part.id)}/process`, { method: "POST" });
+        if (!process.ok) throw new Error("Unable to start the continuation");
+        const updated = await process.json();
+        updateProcessingControls(updated);
+        processingControlNote.textContent = `Part ${part.sequence} is being processed after the existing audio.`;
+      } catch (error) {
+        processingControlNote.textContent = error.message || "Unable to add continuation PDF.";
+      } finally { appendPart.disabled = false; }
     });
     drawChapterNavigation();
     await loadUsage();

@@ -22,12 +22,14 @@ from app.core.rate_limit import limiter
 from app.db.session import get_db_session
 from app.models.audio_chunk import AudioChunk, AudioChunkStatus
 from app.models.book import Book, BookStatus
+from app.models.book_part import BookPart
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.models.playback_state import PlaybackState
 from app.schemas.books import (
     BookAudioChunkRead,
     BookCostRead,
     BookLibraryItemRead,
+    BookPartRead,
     BookProcessingEstimateRead,
     BookProcessingRequest,
     BookProgressRead,
@@ -453,6 +455,18 @@ async def create_book(
         storage_key = f"books/{book.id}/original.pdf"
         await run_in_threadpool(storage.upload_file, temporary_path, storage_key, "application/pdf")
         book.storage_key = storage_key
+        session.add(
+            BookPart(
+                book_id=book.id,
+                sequence=1,
+                original_filename=filename,
+                storage_key=storage_key,
+                size_bytes=size_bytes,
+                page_count=page_count,
+                global_start_page=1,
+                structure_built=False,
+            )
+        )
         await session.commit()
         await session.refresh(book)
     except ObjectStorageError as error:
@@ -464,6 +478,102 @@ async def create_book(
     finally:
         temporary_path.unlink(missing_ok=True)
 
+    return book
+
+
+@router.get("/{book_id}/parts", response_model=list[BookPartRead])
+async def list_book_parts(
+    book_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[BookPart]:
+    return list(
+        (
+            await session.scalars(
+                select(BookPart).where(BookPart.book_id == book_id).order_by(BookPart.sequence)
+            )
+        ).all()
+    )
+
+
+@router.post("/{book_id}/parts", response_model=BookPartRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit(get_settings().upload_rate_limit)
+async def append_book_part(
+    book_id: UUID,
+    request: Request,
+    file: Annotated[UploadFile, File(description="Continuation PDF")],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+) -> BookPart:
+    """Store, but do not process, a PDF that continues an existing book."""
+    book = await session.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+    if file.content_type != "application/pdf":
+        await file.close()
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only PDF files are supported",
+        )
+    settings = get_settings()
+    try:
+        temporary_path, size_bytes = await persist_pdf_upload(
+            file, settings.max_pdf_size_bytes, settings.max_pdf_pages
+        )
+        page_count = await run_in_threadpool(pdf_page_count, temporary_path)
+        previous = await session.scalar(
+            select(BookPart).where(BookPart.book_id == book_id).order_by(BookPart.sequence.desc())
+        )
+        sequence = (previous.sequence if previous else 0) + 1
+        global_start_page = book.page_count + 1
+        part = BookPart(
+            book_id=book.id,
+            sequence=sequence,
+            original_filename=_normalized_filename(file),
+            storage_key=f"books/{book.id}/parts/{sequence:03d}.pdf",
+            size_bytes=size_bytes,
+            page_count=page_count,
+            global_start_page=global_start_page,
+        )
+        await run_in_threadpool(
+            storage.upload_file, temporary_path, part.storage_key, "application/pdf"
+        )
+        book.page_count += page_count
+        session.add(part)
+        await session.commit()
+        await session.refresh(part)
+        return part
+    except ObjectStorageError as error:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    finally:
+        if "temporary_path" in locals():
+            temporary_path.unlink(missing_ok=True)
+
+
+@router.post("/{book_id}/parts/{part_id}/process", response_model=BookRead)
+async def process_book_part(
+    book_id: UUID,
+    part_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> Book:
+    book = await session.get(Book, book_id)
+    part = await session.get(BookPart, part_id)
+    if book is None or part is None or part.book_id != book_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book part not found")
+    if part.structure_built:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Book part is already processed",
+        )
+    book.processing_start_page = part.global_start_page
+    book.processing_end_page = part.global_start_page + part.page_count - 1
+    book.processing_paused = False
+    book.status = BookStatus.PROCESSING
+    await session.commit()
+    from app.workers.tasks import build_book_part_structure
+
+    build_book_part_structure.apply_async(args=[str(book.id), str(part.id)], queue="processing")
+    await session.refresh(book)
     return book
 
 

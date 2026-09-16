@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.reading_language import narration_language_instruction, preserves_source_language
 from app.db.session import SessionLocal
 from app.models.book import Book, BookStatus
+from app.models.book_part import BookPart
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.services.ai.ai_adapter import AIRequest, OpenAIAdapter, UsageContext
 from app.services.ai.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
@@ -17,7 +18,11 @@ from app.services.audio.audio_generation import AudioChunkGenerator, NarrationCh
 from app.services.audio.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
 from app.services.audio.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_synthesizer
 from app.services.audio.tts_usage import TTSUsageCostCalculator
-from app.services.documents.book_structure import BookStructureBuilder
+from app.services.documents.book_structure import (
+    BookStructureBuilder,
+    StructuredChapter,
+    StructuredContentChunk,
+)
 from app.services.documents.book_structure_processor import BookStructureProcessor
 from app.services.documents.book_structure_store import SQLAlchemyBookStructureStore
 from app.services.documents.narration_validation import validate_narration
@@ -72,6 +77,80 @@ def build_book_structure(book_id: str) -> dict[str, int | str]:
     return _run_timed_book_stage(
         "build_structure", book_id, lambda: asyncio.run(_build_book_structure(UUID(book_id)))
     )
+
+
+@celery_app.task(name="ai_reader.books.build_part_structure")
+def build_book_part_structure(book_id: str, part_id: str) -> dict[str, int | str]:
+    """Parse and append one continuation PDF to an existing book."""
+    return _run_timed_book_stage(
+        "build_part_structure",
+        book_id,
+        lambda: asyncio.run(_build_book_part_structure(UUID(book_id), UUID(part_id))),
+    )
+
+
+async def _build_book_part_structure(book_id: UUID, part_id: UUID) -> dict[str, int | str]:
+    async with SessionLocal() as session:
+        book = await session.get(Book, book_id)
+        part = await session.get(BookPart, part_id)
+        existing_part_chapter = None
+        if part is not None:
+            existing_part_chapter = await session.scalar(
+                select(Chapter.id)
+                .where(
+                    Chapter.book_id == book_id,
+                    Chapter.start_page.between(
+                        part.global_start_page,
+                        part.global_start_page + part.page_count - 1,
+                    ),
+                )
+                .limit(1)
+            )
+    if book is None or part is None or part.book_id != book_id:
+        return {"book_id": str(book_id), "status": "obsolete"}
+    if part.structure_built or existing_part_chapter is not None:
+        if not part.structure_built:
+            async with SessionLocal() as session:
+                stored_part = await session.get(BookPart, part_id)
+                if stored_part is not None:
+                    stored_part.structure_built = True
+                    await session.commit()
+        plan_book_processing.apply_async(args=[str(book_id)], queue="processing")
+        return {"book_id": str(book_id), "status": "already_built"}
+
+    document = PDFParser().parse_stored_pdf(get_object_storage(), part.storage_key)
+    local_chapters = BookStructureBuilder().build(document)
+    page_offset = part.global_start_page - 1
+    chapters = tuple(
+        StructuredChapter(
+            chapter_index=chapter.chapter_index,
+            title=chapter.title,
+            start_page=chapter.start_page + page_offset,
+            end_page=chapter.end_page + page_offset,
+            chunks=tuple(
+                StructuredContentChunk(
+                    chunk_index=chunk.chunk_index,
+                    page_number=chunk.page_number + page_offset,
+                    kind=chunk.kind,
+                    source_text=chunk.source_text,
+                )
+                for chunk in chapter.chunks
+            ),
+        )
+        for chapter in local_chapters
+    )
+    await SQLAlchemyBookStructureStore().append(book_id, chapters)
+    async with SessionLocal() as session:
+        stored_part = await session.get(BookPart, part_id)
+        if stored_part is not None:
+            stored_part.structure_built = True
+            await session.commit()
+    plan_book_processing.apply_async(args=[str(book_id)], queue="processing")
+    return {
+        "book_id": str(book_id),
+        "appended_chapters": len(chapters),
+        "queued_content_chunks": sum(len(chapter.chunks) for chapter in chapters),
+    }
 
 
 async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:

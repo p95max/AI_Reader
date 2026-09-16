@@ -7,7 +7,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -17,6 +17,8 @@ from app.services.documents.book_structure import StructuredChapter
 
 class BookStructureStore(Protocol):
     async def replace(self, book_id: UUID, chapters: tuple[StructuredChapter, ...]) -> None: ...
+
+    async def append(self, book_id: UUID, chapters: tuple[StructuredChapter, ...]) -> None: ...
 
 
 SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
@@ -44,28 +46,53 @@ class SQLAlchemyBookStructureStore:
                 await session.commit()
                 return
 
-            for structured_chapter in chapters:
-                chapter = Chapter(
+            await self._insert_chapters(session, book_id, chapters, chapter_offset=0)
+            await session.commit()
+
+    async def append(self, book_id: UUID, chapters: tuple[StructuredChapter, ...]) -> None:
+        """Append a continuation without touching prior audio checkpoints."""
+        async with self._session_factory() as session:
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(CAST(:book_id AS text)))"),
+                {"book_id": str(book_id)},
+            )
+            current_index = await session.scalar(
+                select(func.max(Chapter.chapter_index)).where(Chapter.book_id == book_id)
+            )
+            await self._insert_chapters(
+                session, book_id, chapters, chapter_offset=int(current_index or -1) + 1
+            )
+            await session.commit()
+
+    @staticmethod
+    async def _insert_chapters(
+        session: AsyncSession,
+        book_id: UUID,
+        chapters: tuple[StructuredChapter, ...],
+        *,
+        chapter_offset: int,
+    ) -> None:
+        for structured_chapter in chapters:
+            chapter = Chapter(
                     book_id=book_id,
-                    chapter_index=structured_chapter.chapter_index,
+                    chapter_index=chapter_offset + structured_chapter.chapter_index,
                     title=structured_chapter.title,
                     start_page=structured_chapter.start_page,
                     end_page=structured_chapter.end_page,
                     status=ProcessingStatus.QUEUED,
-                )
-                session.add(chapter)
-                await session.flush()
-                session.add_all(
-                    [
-                        ContentChunk(
-                            chapter_id=chapter.id,
-                            chunk_index=chunk.chunk_index,
-                            page_number=chunk.page_number,
-                            kind=chunk.kind,
-                            source_text=chunk.source_text,
-                            status=ProcessingStatus.QUEUED,
-                        )
-                        for chunk in structured_chapter.chunks
-                    ]
-                )
-            await session.commit()
+            )
+            session.add(chapter)
+            await session.flush()
+            session.add_all(
+                [
+                    ContentChunk(
+                        chapter_id=chapter.id,
+                        chunk_index=chunk.chunk_index,
+                        page_number=chunk.page_number,
+                        kind=chunk.kind,
+                        source_text=chunk.source_text,
+                        status=ProcessingStatus.QUEUED,
+                    )
+                    for chunk in structured_chapter.chunks
+                ]
+            )

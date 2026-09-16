@@ -123,6 +123,17 @@ class BookProcessingRequest(BookTTSSettingsUpdate):
     end_page: int | None = Field(default=None, ge=1)
 
 
+class BookPartRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    sequence: int
+    original_filename: str
+    page_count: int
+    global_start_page: int
+    structure_built: bool
+
+
 class UserPreferencesUpdate(NarrationPreferences):
     pass
 

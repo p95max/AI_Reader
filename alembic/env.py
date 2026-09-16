@@ -10,6 +10,7 @@ from app.db.base import Base
 from app.models import (  # noqa: F401
     audio_chunk,
     book,
+    book_part,
     chapter,
     llm_usage,
     playback_state,
