@@ -325,11 +325,11 @@ async function renderUpload() {
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
       <section class="upload-language-control" aria-label="Reading language"><label class="voice-setting upload-language-setting">Reading language<select id="reading-language-setting" aria-label="Reading language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="ru">Russian</option><option value="de">German</option></select></label></section>
-      <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div class="page-range-sliders"><label>From page <output id="start-page-value" for="start-page">1</output><input id="start-page" type="range" min="1" max="1" value="1"></label><label>To page <output id="end-page-value" for="end-page">1</output><input id="end-page" type="range" min="1" max="1" value="1"></label></div><small>Start with a chapter or a sample. You can return later and process more pages from the same uploaded PDF.</small></section>
+      <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div class="page-range-sliders"><div class="page-range-sliders__values"><label for="start-page">From page <output id="start-page-value" for="start-page">1</output></label><label for="end-page">To page <output id="end-page-value" for="end-page">1</output></label></div><div id="page-range-track" class="page-range-track"><i aria-hidden="true"></i><input id="start-page" type="range" min="1" max="1" value="1" aria-label="First page to process"><input id="end-page" type="range" min="1" max="1" value="1" aria-label="Last page to process"></div></div><small>Drag either marker to select a sample or a chapter. You can process more pages later from the same PDF.</small></section>
       <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
       <details class="upload-settings"><summary>PROCESSING SETTINGS <span>Use saved defaults or customise this book</span></summary><div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div></details>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. total cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
-      <p id="estimate-note" class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><p id="upload-status" class="upload-status" aria-live="polite"></p>
+      <p id="estimate-note" class="estimate-note">Estimate is based on file size and is refined after PDF extraction.</p><aside id="cost-recommendation" class="cost-recommendation" hidden aria-live="polite"></aside><p id="upload-status" class="upload-status" aria-live="polite"></p>
       <button id="start-processing" class="button button--wide" type="submit" disabled>START PROCESSING</button>
     </form>
   `);
@@ -340,12 +340,14 @@ async function renderUpload() {
   const selectedFile = document.querySelector("#selected-file");
   const startButton = document.querySelector("#start-processing");
   const statusMessage = document.querySelector("#upload-status");
+  const costRecommendation = document.querySelector("#cost-recommendation");
   const processingScope = document.querySelector("#processing-scope");
   const pageCountNote = document.querySelector("#page-count-note");
   const startPage = document.querySelector("#start-page");
   const endPage = document.querySelector("#end-page");
   const startPageValue = document.querySelector("#start-page-value");
   const endPageValue = document.querySelector("#end-page-value");
+  const pageRangeTrack = document.querySelector("#page-range-track");
   const readingLanguageSetting = document.querySelector("#reading-language-setting");
   const voiceSetting = document.querySelector("#voice-setting");
   const speedSetting = document.querySelector("#speed-setting");
@@ -382,14 +384,35 @@ async function renderUpload() {
     const minutes = Math.round((seconds % 3_600) / 60);
     return hours ? `~ ${hours}h ${minutes}m` : `~ ${minutes}m`;
   };
+  const renderEstimate = (estimate, description) => {
+    document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
+    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
+    document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
+    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · ${description}`;
+
+    const ttsCost = Number(estimate.estimated_tts_cost_usd);
+    if (!uploadedBook || ttsCost <= 5) {
+      costRecommendation.hidden = true;
+      costRecommendation.replaceChildren();
+      return;
+    }
+    const selectedStart = Number(startPage.value);
+    const selectedEnd = Number(endPage.value);
+    const selectedPages = selectedEnd - selectedStart + 1;
+    const suggestedPages = Math.max(1, Math.min(selectedPages, Math.floor(selectedPages * 5 / ttsCost)));
+    const suggestedEnd = selectedStart + suggestedPages - 1;
+    costRecommendation.hidden = false;
+    costRecommendation.innerHTML = `<b>TTS ESTIMATE EXCEEDS $5</b><span>Start with pages ${selectedStart}–${suggestedEnd} (about $5), then process more when you are happy with the narration.</span>${suggestedEnd < selectedEnd ? '<button type="button" id="use-budget-range">USE ~$5 RANGE</button>' : ""}`;
+    costRecommendation.querySelector("#use-budget-range")?.addEventListener("click", () => {
+      endPage.value = String(suggestedEnd);
+      syncPageRange({ estimate: true });
+    });
+  };
   const loadEstimate = async (selected) => {
     const response = await fetch(`/api/v1/books/estimate?file_size_bytes=${selected.size}`);
     if (!response.ok) throw new Error("Unable to calculate estimate");
     const estimate = await response.json();
-    document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
-    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
-    document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
-    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · based on file size.`;
+    renderEstimate(estimate, "based on file size.");
   };
   const loadUploadedEstimate = async () => {
     if (!uploadedBook) return;
@@ -399,10 +422,7 @@ async function renderUpload() {
     const response = await fetch(`/api/v1/books/${encodeURIComponent(uploadedBook.id)}/estimate?start_page=${start}&end_page=${end}`);
     if (!response.ok) throw new Error("Unable to estimate this page range");
     const estimate = await response.json();
-    document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
-    document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
-    document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
-    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · for the selected pages.`;
+    renderEstimate(estimate, "for the selected pages.");
   };
   const responseError = async (response, fallback) => {
     if (response.status === 429) return "Too many requests. Please wait a minute before trying again.";
@@ -439,6 +459,9 @@ async function renderUpload() {
     endPage.value = String(Math.max(Number(startPage.value), Math.min(uploadedBook.page_count, Number(endPage.value) || uploadedBook.page_count)));
     startPageValue.textContent = startPage.value;
     endPageValue.textContent = endPage.value;
+    const denominator = Math.max(1, uploadedBook.page_count - 1);
+    pageRangeTrack.style.setProperty("--range-start", `${((Number(startPage.value) - 1) / denominator) * 100}%`);
+    pageRangeTrack.style.setProperty("--range-end", `${((Number(endPage.value) - 1) / denominator) * 100}%`);
     if (estimate) void loadUploadedEstimate().catch(() => { statusMessage.textContent = "Range estimate is unavailable. Please adjust the pages and try again."; });
   };
   [startPage, endPage].forEach((input) => input.addEventListener("input", () => syncPageRange()));
