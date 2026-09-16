@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import case, func, select, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -149,11 +149,37 @@ async def list_books(
     stats = await session.execute(
         select(
             Chapter.book_id,
-            func.count(ContentChunk.id).label("total_chunks"),
+            func.count(
+                case(
+                    (
+                        ContentChunk.page_number.between(
+                            Book.processing_start_page,
+                            Book.processing_end_page,
+                        ),
+                        ContentChunk.id,
+                    )
+                )
+            ).label("total_chunks"),
             func.coalesce(
-                func.sum(case((ContentChunk.status == ProcessingStatus.READY, 1), else_=0)), 0
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                ContentChunk.page_number.between(
+                                    Book.processing_start_page,
+                                    Book.processing_end_page,
+                                ),
+                                ContentChunk.status == ProcessingStatus.READY,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
             ).label("ready_chunks"),
         )
+        .join(Book, Chapter.book_id == Book.id)
         .outerjoin(ContentChunk, ContentChunk.chapter_id == Chapter.id)
         .where(Chapter.book_id.in_(book.id for book in books))
         .group_by(Chapter.book_id)

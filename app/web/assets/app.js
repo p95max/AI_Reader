@@ -325,7 +325,7 @@ async function renderUpload() {
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
       <p id="selected-file" class="selected-file" aria-live="polite">No file selected</p>
       <section class="upload-language-control" aria-label="Reading language"><label class="voice-setting upload-language-setting">Reading language<select id="reading-language-setting" aria-label="Reading language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="ru">Russian</option><option value="de">German</option></select></label></section>
-      <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div><label>From page <input id="start-page" type="number" min="1" value="1"></label><label>To page <input id="end-page" type="number" min="1" value="1"></label></div><small>Start with a chapter or a sample. You can return later and process more pages from the same uploaded PDF.</small></section>
+      <section id="processing-scope" class="processing-scope" hidden aria-label="Pages to process"><b>PROCESSING SCOPE</b><p id="page-count-note">Upload the PDF to choose pages.</p><div class="page-range-sliders"><label>From page <output id="start-page-value" for="start-page">1</output><input id="start-page" type="range" min="1" max="1" value="1"></label><label>To page <output id="end-page-value" for="end-page">1</output><input id="end-page" type="range" min="1" max="1" value="1"></label></div><small>Start with a chapter or a sample. You can return later and process more pages from the same uploaded PDF.</small></section>
       <section class="upload-guidance" aria-label="How processing works"><b>WHAT HAPPENS NEXT</b><ol><li>We verify the PDF, its size, and its page count.</li><li>AI Reader extracts sections and prepares an estimate.</li><li>Audio is generated in the background. The first ready segments appear in the player, and you can safely leave this page.</li></ol></section>
       <details class="upload-settings"><summary>PROCESSING SETTINGS <span>Use saved defaults or customise this book</span></summary><div class="mode-panel"><span>Code mode</span><div class="mode-buttons mode-buttons--four" id="mode-buttons"><button type="button" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button><button type="button" class="is-active" data-mode="hybrid">Hybrid</button></div><span class="reading-style-label">Table mode</span><div class="mode-buttons" id="table-mode-buttons"><button type="button" class="is-active" data-mode="summarize">Summarize</button><button type="button" data-mode="read_all">Read all</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Diagram mode</span><div class="mode-buttons mode-buttons--two" id="diagram-mode-buttons"><button type="button" class="is-active" data-mode="describe">Describe</button><button type="button" data-mode="skip">Skip</button></div><span class="reading-style-label">Formula mode</span><div class="mode-buttons" id="formula-mode-buttons"><button type="button" class="is-active" data-mode="explain">Explain</button><button type="button" data-mode="read">Read</button><button type="button" data-mode="skip">Skip</button></div><label class="voice-setting">Voice<select id="voice-setting" aria-label="Voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><label class="voice-setting">Speech speed<select id="speed-setting" aria-label="Speech speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><span class="reading-style-label">Reading style</span><div class="mode-buttons" id="style-buttons"><button type="button" data-style="calm">Calm</button><button type="button" class="is-active" data-style="neutral">Neutral</button><button type="button" data-style="expressive">Expressive</button></div></div></details>
       <div class="estimate"><span>Est. tokens<br><b id="estimate-tokens">—</b></span><span>Est. AI cost<br><b id="estimate-cost">—</b></span><span>Est. audio<br><b id="estimate-audio">—</b></span></div>
@@ -344,6 +344,8 @@ async function renderUpload() {
   const pageCountNote = document.querySelector("#page-count-note");
   const startPage = document.querySelector("#start-page");
   const endPage = document.querySelector("#end-page");
+  const startPageValue = document.querySelector("#start-page-value");
+  const endPageValue = document.querySelector("#end-page-value");
   const readingLanguageSetting = document.querySelector("#reading-language-setting");
   const voiceSetting = document.querySelector("#voice-setting");
   const speedSetting = document.querySelector("#speed-setting");
@@ -429,12 +431,16 @@ async function renderUpload() {
     }
   };
   fileInput.addEventListener("change", () => selectFile(fileInput.files[0]));
-  [startPage, endPage].forEach((input) => input.addEventListener("change", () => {
+  const syncPageRange = ({ estimate = false } = {}) => {
     if (!uploadedBook) return;
     startPage.value = String(Math.max(1, Math.min(uploadedBook.page_count, Number(startPage.value) || 1)));
     endPage.value = String(Math.max(Number(startPage.value), Math.min(uploadedBook.page_count, Number(endPage.value) || uploadedBook.page_count)));
-    void loadUploadedEstimate().catch(() => { statusMessage.textContent = "Range estimate is unavailable. Please adjust the pages and try again."; });
-  }));
+    startPageValue.textContent = startPage.value;
+    endPageValue.textContent = endPage.value;
+    if (estimate) void loadUploadedEstimate().catch(() => { statusMessage.textContent = "Range estimate is unavailable. Please adjust the pages and try again."; });
+  };
+  [startPage, endPage].forEach((input) => input.addEventListener("input", () => syncPageRange()));
+  [startPage, endPage].forEach((input) => input.addEventListener("change", () => syncPageRange({ estimate: true })));
   dropZone.addEventListener("dragover", (event) => { event.preventDefault(); dropZone.classList.add("is-dragging"); });
   dropZone.addEventListener("dragleave", () => dropZone.classList.remove("is-dragging"));
   dropZone.addEventListener("drop", (event) => { event.preventDefault(); dropZone.classList.remove("is-dragging"); selectFile(event.dataTransfer.files[0]); });
@@ -501,6 +507,7 @@ async function renderUpload() {
         startPage.max = String(uploadedBook.page_count);
         endPage.max = String(uploadedBook.page_count);
         endPage.value = String(uploadedBook.page_count);
+        syncPageRange();
         pageCountNote.textContent = `${uploadedBook.page_count} pages detected. Review the estimate, then confirm processing.`;
         await loadUploadedEstimate();
         startButton.textContent = "CONFIRM & START PROCESSING";
@@ -626,7 +633,7 @@ function formatPlaybackTime(seconds) {
 async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
     <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
-    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div><div class="append-part"><label>Add continuation PDF <input id="append-part-file" type="file" accept="application/pdf"></label><button type="button" id="append-part">ADD PART</button></div></section>
+    <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div class="player-heading__details"><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span><div id="book-processing-progress" class="book-processing-progress" role="progressbar" aria-label="Book processing progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i><span id="book-processing-percent">0%</span></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div><div class="append-part"><label>Add continuation PDF <input id="append-part-file" type="file" accept="application/pdf"></label><button type="button" id="append-part">ADD PART</button></div></section></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div>
     <div class="player-workspace"><div class="player-main"><section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section></div>
     <div id="chapters-backdrop" class="chapters-backdrop" hidden></div><aside id="chapter-navigation" class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button><button type="button" id="close-chapters" class="close-chapters" aria-label="Close chapters">×</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></aside></div>
     <details class="usage-panel" id="usage-panel" open><summary><span><h2>USAGE &amp; COST</h2><small>Live processing totals</small></span><b aria-hidden="true">⌄</b></summary><div class="usage-grid"><article class="usage-card"><span>AI TOKENS</span><b id="usage-tokens">—</b><small id="usage-token-detail">Input / output</small></article><article class="usage-card"><span>AI COST</span><b id="usage-ai-cost">—</b><small id="usage-ai-requests">LLM requests</small></article><article class="usage-card"><span>GENERATED AUDIO</span><b id="usage-audio-duration">—</b><small id="usage-generation-time">Generation time</small></article><article class="usage-card"><span>TTS COST</span><b id="usage-tts-cost">—</b><small>Generated audio and GPU</small></article><article class="usage-card usage-card--total"><span>TOTAL COST</span><b id="usage-total-cost">—</b><small>AI adaptation + TTS</small></article></div><p id="usage-note">Loading usage data…</p></details>
@@ -670,12 +677,18 @@ async function renderBookPage() {
   const usageTtsCost = document.querySelector("#usage-tts-cost");
   const usageTotalCost = document.querySelector("#usage-total-cost");
   const usageNote = document.querySelector("#usage-note");
+  const bookProcessingProgress = document.querySelector("#book-processing-progress");
+  const bookProcessingPercent = document.querySelector("#book-processing-percent");
   const processingControls = document.querySelector("#processing-controls");
   const processingControlNote = document.querySelector("#processing-control-note");
   const pauseProcessing = document.querySelector("#pause-processing");
   const resumeProcessing = document.querySelector("#resume-processing");
   const cancelProcessing = document.querySelector("#cancel-processing");
   const extendEndPage = document.querySelector("#extend-end-page");
+  extendEndPage.type = "range";
+  const extendEndPageValue = document.createElement("output");
+  extendEndPageValue.className = "extend-page-slider__value";
+  extendEndPage.insertAdjacentElement("beforebegin", extendEndPageValue);
   const extendProcessing = document.querySelector("#extend-processing");
   const appendPartFile = document.querySelector("#append-part-file");
   const appendPart = document.querySelector("#append-part");
@@ -687,6 +700,13 @@ async function renderBookPage() {
   let lastPersistedAt = 0;
   let audioRetryAttempts = 0;
   let backgroundRefreshTimer = null;
+
+  const setBookProcessingProgress = (progress) => {
+    const percent = Math.max(0, Math.min(100, Number(progress?.progress_percent) || 0));
+    bookProcessingProgress.querySelector("i").style.width = `${percent}%`;
+    bookProcessingProgress.setAttribute("aria-valuenow", String(Math.round(percent)));
+    bookProcessingPercent.textContent = `${Math.round(percent)}%`;
+  };
 
   const savedVolume = Number(window.localStorage.getItem("ai-reader:volume"));
   const initialVolume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1
@@ -777,6 +797,7 @@ async function renderBookPage() {
       const restoredIndex = chunks.findIndex((chunk) => chunk.id === selectedId);
       if (restoredIndex >= 0) currentChunk = restoredIndex;
       chapters = makeNavigableSections(progress.chapters);
+      setBookProcessingProgress(progress);
       drawChapterNavigation();
       setControlsEnabled(chunks.length > 0);
       updateButtons();
@@ -996,6 +1017,7 @@ async function renderBookPage() {
     const progress = await progressResponse.json();
     const playback = await playbackResponse.json();
     chapters = makeNavigableSections(progress.chapters);
+    setBookProcessingProgress(progress);
     title.textContent = book.title;
     author.textContent = book.author;
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
@@ -1011,8 +1033,10 @@ async function renderBookPage() {
       resumeProcessing.hidden = !paused;
       extendEndPage.max = String(current.page_count);
       extendEndPage.value = String(current.processing_end_page);
+      extendEndPageValue.textContent = extendEndPage.value;
     };
     updateProcessingControls(book);
+    extendEndPage.addEventListener("input", () => { extendEndPageValue.textContent = extendEndPage.value; });
     pauseProcessing.addEventListener("click", async () => {
       const response = await fetch(`/api/v1/books/${encodeURIComponent(bookId)}/pause`, { method: "POST" });
       if (!response.ok) return;
