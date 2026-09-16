@@ -1151,9 +1151,12 @@ async function refreshGlobalProcessing() {
     window.dispatchEvent(new CustomEvent("books-updated", { detail: books }));
     const panel = document.querySelector("#background-status");
     if (!panel) return;
-    const active = books.filter((book) => book.status === "processing");
+    const active = books.filter((book) => book.status === "processing" && Number(book.progress_percent) < 100);
     panel.hidden = active.length === 0;
-    panel.innerHTML = active.map((book) => `<a href="/books/${encodeURIComponent(book.id)}">Processing in background · ${escapeHtml(book.title)} · ${Number(book.progress_percent).toFixed(0)}%<span class="processing-line" aria-hidden="true"><i></i></span></a>`).join("");
+    panel.innerHTML = active.map((book) => {
+      const percent = Math.max(0, Math.min(100, Number(book.progress_percent) || 0));
+      return `<a href="/books/${encodeURIComponent(book.id)}">Processing in background · ${escapeHtml(book.title)} · ${Math.round(percent)}%<span class="background-progress" aria-hidden="true"><i style="width:${percent}%"></i></span></a>`;
+    }).join("");
   } catch (error) {
     const panel = document.querySelector("#background-status");
     if (panel) { panel.hidden = false; panel.textContent = "Processing status unavailable. Reconnecting…"; }
