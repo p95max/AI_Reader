@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.db.session import get_db_session
 from app.main import app
 
 client = TestClient(app)
@@ -7,6 +8,24 @@ client = TestClient(app)
 
 def test_health_check() -> None:
     response = client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_readiness_check_verifies_database_access() -> None:
+    class ReadySession:
+        async def execute(self, statement: object) -> None:
+            assert str(statement) == "SELECT 1"
+
+    async def get_ready_session():
+        yield ReadySession()
+
+    app.dependency_overrides[get_db_session] = get_ready_session
+    try:
+        response = client.get("/api/v1/health/ready")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}

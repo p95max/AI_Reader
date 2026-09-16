@@ -1,8 +1,16 @@
+from time import perf_counter
+
+import structlog
 from celery import Celery
+from celery.signals import task_failure, task_postrun, task_prerun
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 
 settings = get_settings()
+configure_logging(debug=settings.debug)
+logger = structlog.get_logger(__name__)
+_task_started_at: dict[str, float] = {}
 
 celery_app = Celery(
     "ai_reader",
@@ -29,3 +37,46 @@ celery_app.conf.update(
         "ai_reader.tts.*": {"queue": "tts"},
     },
 )
+
+
+@task_prerun.connect
+def log_worker_task_started(task_id: str | None = None, task=None, **_kwargs: object) -> None:
+    if task_id is None or task is None:
+        return
+    _task_started_at[task_id] = perf_counter()
+    logger.info("worker_task_started", task_id=task_id, task_name=task.name)
+
+
+@task_postrun.connect
+def log_worker_task_finished(
+    task_id: str | None = None,
+    task=None,
+    state: str | None = None,
+    **_kwargs: object,
+) -> None:
+    if task_id is None or task is None:
+        return
+    started_at = _task_started_at.pop(task_id, None)
+    logger.info(
+        "worker_task_finished",
+        task_id=task_id,
+        task_name=task.name,
+        state=state,
+        duration_ms=round((perf_counter() - started_at) * 1_000) if started_at else None,
+    )
+
+
+@task_failure.connect
+def log_worker_task_failure(
+    task_id: str | None = None,
+    exception: Exception | None = None,
+    sender=None,
+    **_kwargs: object,
+) -> None:
+    logger.error(
+        "worker_task_failed",
+        task_id=task_id,
+        task_name=getattr(sender, "name", None),
+        error_type=type(exception).__name__ if exception else None,
+        error=str(exception) if exception else None,
+    )

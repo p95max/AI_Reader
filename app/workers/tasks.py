@@ -1,6 +1,8 @@
 import asyncio
+from time import perf_counter
 from uuid import UUID
 
+import structlog
 from sqlalchemy import and_, func, or_, select, update
 
 from app.core.config import get_settings
@@ -25,6 +27,35 @@ from app.services.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_s
 from app.services.tts_usage import TTSUsageCostCalculator
 from app.workers.celery_app import celery_app
 
+logger = structlog.get_logger(__name__)
+
+
+def _run_timed_book_stage(
+    stage: str,
+    book_id: str,
+    operation,
+):
+    """Record pipeline stage duration without putting document content in logs."""
+    started_at = perf_counter()
+    logger.info("book_processing_stage_started", book_id=book_id, stage=stage)
+    try:
+        result = operation()
+    except Exception:
+        logger.exception(
+            "book_processing_stage_failed",
+            book_id=book_id,
+            stage=stage,
+            duration_ms=round((perf_counter() - started_at) * 1_000),
+        )
+        raise
+    logger.info(
+        "book_processing_stage_finished",
+        book_id=book_id,
+        stage=stage,
+        duration_ms=round((perf_counter() - started_at) * 1_000),
+    )
+    return result
+
 
 @celery_app.task(name="ai_reader.healthcheck")
 def healthcheck() -> dict[str, str]:
@@ -35,7 +66,9 @@ def healthcheck() -> dict[str, str]:
 @celery_app.task(name="ai_reader.books.build_structure")
 def build_book_structure(book_id: str) -> dict[str, int | str]:
     """Parse a stored PDF and persist its chapter/content-chunk structure."""
-    return asyncio.run(_build_book_structure(UUID(book_id)))
+    return _run_timed_book_stage(
+        "build_structure", book_id, lambda: asyncio.run(_build_book_structure(UUID(book_id)))
+    )
 
 
 async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:
@@ -71,7 +104,9 @@ async def _build_book_structure(book_id: UUID) -> dict[str, int | str]:
 @celery_app.task(name="ai_reader.processing.plan_book")
 def plan_book_processing(book_id: str) -> dict[str, object]:
     """Return the priority-aware work plan without blocking playback."""
-    return asyncio.run(_plan_book_processing(UUID(book_id)))
+    return _run_timed_book_stage(
+        "plan_book", book_id, lambda: asyncio.run(_plan_book_processing(UUID(book_id)))
+    )
 
 
 async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
@@ -122,6 +157,7 @@ def narrate_content_chunk(self, content_chunk_id: str) -> dict[str, str]:
 
 
 async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
+    started_at = perf_counter()
     async with SessionLocal() as session:
         row = (
             await session.execute(
@@ -139,6 +175,13 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
         content_chunk.status = ProcessingStatus.PROCESSING
         chapter.status = ProcessingStatus.PROCESSING
         await session.commit()
+
+    logger.info(
+        "book_processing_stage_started",
+        book_id=str(book.id),
+        stage="narrate_content_chunk",
+        content_chunk_id=str(content_chunk_id),
+    )
 
     context = UsageContext(
         book_id=book.id,
@@ -177,6 +220,13 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
     validate_narration(response.text)
     synthesize_content_chunk.apply_async(
         args=[str(content_chunk.id), response.text], queue="tts"
+    )
+    logger.info(
+        "book_processing_stage_finished",
+        book_id=str(book.id),
+        stage="narrate_content_chunk",
+        content_chunk_id=str(content_chunk_id),
+        duration_ms=round((perf_counter() - started_at) * 1_000),
     )
     return {"content_chunk_id": str(content_chunk_id), "status": "narrated"}
 
@@ -262,6 +312,7 @@ def _is_final_attempt(
 async def _synthesize_content_chunk(
     content_chunk_id: UUID, narration: str, *, attempt_count: int
 ) -> dict[str, object]:
+    started_at = perf_counter()
     async with SessionLocal() as session:
         row = (
             await session.execute(
@@ -275,6 +326,13 @@ async def _synthesize_content_chunk(
             return {"content_chunk_id": str(content_chunk_id), "status": "obsolete"}
         content_chunk, chapter, book = row
         base_index = await _content_audio_base_index(session, content_chunk, chapter)
+
+    logger.info(
+        "book_processing_stage_started",
+        book_id=str(book.id),
+        stage="synthesize_content_chunk",
+        content_chunk_id=str(content_chunk_id),
+    )
 
     settings = get_settings()
     validate_narration(narration)
@@ -303,6 +361,13 @@ async def _synthesize_content_chunk(
         content_chunk.status = ProcessingStatus.READY
         await _refresh_completion(session, book.id, content_chunk.chapter_id)
         await session.commit()
+    logger.info(
+        "book_processing_stage_finished",
+        book_id=str(book.id),
+        stage="synthesize_content_chunk",
+        content_chunk_id=str(content_chunk_id),
+        duration_ms=round((perf_counter() - started_at) * 1_000),
+    )
     return {
         "content_chunk_id": str(content_chunk_id),
         "chunks": [chunk.as_task_payload() for chunk in chunks],
@@ -366,27 +431,30 @@ def generate_audio_chunks(
     style: str | None = None,
 ) -> dict[str, object]:
     """Generate TTS chunks with per-chunk checkpoints and retry support."""
-    parsed_book_id = UUID(book_id)
-    settings = get_settings()
-    book_voice, book_speed, book_style = asyncio.run(_book_tts_preferences(parsed_book_id))
-    generator = AudioChunkGenerator(
-        get_tts_synthesizer(),
-        get_object_storage(),
-        chunker=NarrationChunker(settings.tts_chunk_max_characters),
-    )
-    processor = ResilientTTSProcessor(
-        generator,
-        SQLAlchemyAudioChunkStore(),
-        cost_calculator=TTSUsageCostCalculator(settings),
-    )
-    chunks = asyncio.run(
-        processor.process(
-            parsed_book_id,
-            narration,
-            voice=voice or book_voice or settings.tts_voice,
-            speed=SpeechSpeed(speed or book_speed or SpeechSpeed.NORMAL.value),
-            style=ReadingStyle(style or book_style or ReadingStyle.NEUTRAL.value),
-            attempt_count=self.request.retries + 1,
+    def run() -> dict[str, object]:
+        parsed_book_id = UUID(book_id)
+        settings = get_settings()
+        book_voice, book_speed, book_style = asyncio.run(_book_tts_preferences(parsed_book_id))
+        generator = AudioChunkGenerator(
+            get_tts_synthesizer(),
+            get_object_storage(),
+            chunker=NarrationChunker(settings.tts_chunk_max_characters),
         )
-    )
-    return {"book_id": book_id, "chunks": [chunk.as_task_payload() for chunk in chunks]}
+        processor = ResilientTTSProcessor(
+            generator,
+            SQLAlchemyAudioChunkStore(),
+            cost_calculator=TTSUsageCostCalculator(settings),
+        )
+        chunks = asyncio.run(
+            processor.process(
+                parsed_book_id,
+                narration,
+                voice=voice or book_voice or settings.tts_voice,
+                speed=SpeechSpeed(speed or book_speed or SpeechSpeed.NORMAL.value),
+                style=ReadingStyle(style or book_style or ReadingStyle.NEUTRAL.value),
+                attempt_count=self.request.retries + 1,
+            )
+        )
+        return {"book_id": book_id, "chunks": [chunk.as_task_payload() for chunk in chunks]}
+
+    return _run_timed_book_stage("generate_audio", book_id, run)

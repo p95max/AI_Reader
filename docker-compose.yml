@@ -124,7 +124,7 @@ services:
         condition: service_started
     healthcheck:
       test:
-        ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200"]
+        ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3).status == 200"]
       interval: 60s
       timeout: 5s
       retries: 12
@@ -134,7 +134,7 @@ services:
   worker-processing:
     <<: [*app-image, *app-code]
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --concurrency=2 --prefetch-multiplier=1 --loglevel=INFO" /app/app
+    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --hostname=processing@%h --concurrency=2 --prefetch-multiplier=1 --loglevel=INFO" /app/app
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -143,11 +143,17 @@ services:
       minio:
         condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d processing@$$HOSTNAME --timeout=3 | grep -q pong"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   worker-tts:
     <<: [*app-image, *app-build, *app-code]
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --concurrency=${AI_READER_TTS_WORKER_CONCURRENCY:-2} --prefetch-multiplier=1 --loglevel=INFO" /app/app
+    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --hostname=tts@%h --concurrency=${AI_READER_TTS_WORKER_CONCURRENCY:-2} --prefetch-multiplier=1 --loglevel=INFO" /app/app
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -156,6 +162,12 @@ services:
       minio:
         condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d tts@$$HOSTNAME --timeout=3 | grep -q pong"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
   postgres_data:
