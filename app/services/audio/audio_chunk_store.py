@@ -8,6 +8,7 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -82,8 +83,14 @@ class SQLAlchemyAudioChunkStore:
             for chunk in chunks
         ]
         async with self._session_factory() as session:
-            session.add_all(records)
-            await session.commit()
+            try:
+                session.add_all(records)
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                if self._is_missing_book_fk_error(error):
+                    return
+                raise
 
     async def is_ready(self, book_id: UUID, chunk_index: int) -> bool:
         async with self._session_factory() as session:
@@ -130,39 +137,45 @@ class SQLAlchemyAudioChunkStore:
         tts_cost_usd: float,
     ) -> None:
         async with self._session_factory() as session:
-            record = await self._get_chunk(session, book_id, chunk.chunk_index)
-            if record is None:
-                session.add(
-                    AudioChunk(
-                        book_id=book_id,
-                        chunk_index=chunk.chunk_index,
-                        narration=chunk.narration,
-                        storage_key=chunk.storage_key,
-                        content_type=chunk.content_type,
-                        duration_milliseconds=chunk.duration_milliseconds,
-                        status=AudioChunkStatus.READY,
-                        voice=voice,
-                        tts_provider=tts_provider,
-                        tts_model=tts_model,
-                        attempt_count=attempt_count,
-                        generation_time_milliseconds=generation_time_milliseconds,
-                        tts_cost_usd=tts_cost_usd,
+            try:
+                record = await self._get_chunk(session, book_id, chunk.chunk_index)
+                if record is None:
+                    session.add(
+                        AudioChunk(
+                            book_id=book_id,
+                            chunk_index=chunk.chunk_index,
+                            narration=chunk.narration,
+                            storage_key=chunk.storage_key,
+                            content_type=chunk.content_type,
+                            duration_milliseconds=chunk.duration_milliseconds,
+                            status=AudioChunkStatus.READY,
+                            voice=voice,
+                            tts_provider=tts_provider,
+                            tts_model=tts_model,
+                            attempt_count=attempt_count,
+                            generation_time_milliseconds=generation_time_milliseconds,
+                            tts_cost_usd=tts_cost_usd,
+                        )
                     )
-                )
-            else:
-                record.narration = chunk.narration
-                record.storage_key = chunk.storage_key
-                record.content_type = chunk.content_type
-                record.duration_milliseconds = chunk.duration_milliseconds
-                record.status = AudioChunkStatus.READY
-                record.voice = voice
-                record.tts_provider = tts_provider
-                record.tts_model = tts_model
-                record.attempt_count = attempt_count
-                record.generation_time_milliseconds = generation_time_milliseconds
-                record.tts_cost_usd = tts_cost_usd
-                record.error_message = None
-            await session.commit()
+                else:
+                    record.narration = chunk.narration
+                    record.storage_key = chunk.storage_key
+                    record.content_type = chunk.content_type
+                    record.duration_milliseconds = chunk.duration_milliseconds
+                    record.status = AudioChunkStatus.READY
+                    record.voice = voice
+                    record.tts_provider = tts_provider
+                    record.tts_model = tts_model
+                    record.attempt_count = attempt_count
+                    record.generation_time_milliseconds = generation_time_milliseconds
+                    record.tts_cost_usd = tts_cost_usd
+                    record.error_message = None
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                if self._is_missing_book_fk_error(error):
+                    return
+                raise
 
     async def mark_failed(
         self,
@@ -178,32 +191,43 @@ class SQLAlchemyAudioChunkStore:
         error_message: str,
     ) -> None:
         async with self._session_factory() as session:
-            record = await self._get_chunk(session, book_id, chunk_index)
-            if record is None:
-                session.add(
-                    AudioChunk(
-                        book_id=book_id,
-                        chunk_index=chunk_index,
-                        narration=narration,
-                        storage_key=storage_key,
-                        content_type="audio/wav",
-                        duration_milliseconds=0,
-                        status=AudioChunkStatus.FAILED,
-                        voice=voice,
-                        tts_provider=tts_provider,
-                        tts_model=tts_model,
-                        attempt_count=attempt_count,
-                        error_message=error_message[:2_000],
+            try:
+                record = await self._get_chunk(session, book_id, chunk_index)
+                if record is None:
+                    session.add(
+                        AudioChunk(
+                            book_id=book_id,
+                            chunk_index=chunk_index,
+                            narration=narration,
+                            storage_key=storage_key,
+                            content_type="audio/wav",
+                            duration_milliseconds=0,
+                            status=AudioChunkStatus.FAILED,
+                            voice=voice,
+                            tts_provider=tts_provider,
+                            tts_model=tts_model,
+                            attempt_count=attempt_count,
+                            error_message=error_message[:2_000],
+                        )
                     )
-                )
-            else:
-                record.status = AudioChunkStatus.FAILED
-                record.voice = voice
-                record.tts_provider = tts_provider
-                record.tts_model = tts_model
-                record.attempt_count = attempt_count
-                record.error_message = error_message[:2_000]
-            await session.commit()
+                else:
+                    record.status = AudioChunkStatus.FAILED
+                    record.voice = voice
+                    record.tts_provider = tts_provider
+                    record.tts_model = tts_model
+                    record.attempt_count = attempt_count
+                    record.error_message = error_message[:2_000]
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                if self._is_missing_book_fk_error(error):
+                    return
+                raise
+
+    @staticmethod
+    def _is_missing_book_fk_error(error: IntegrityError) -> bool:
+        text = str(error.orig).lower()
+        return "audio_chunks_book_id_fkey" in text or "violates foreign key constraint" in text
 
     @staticmethod
     async def _get_chunk(
