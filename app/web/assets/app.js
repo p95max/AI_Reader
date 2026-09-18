@@ -13,6 +13,13 @@ const pages = {
   },
 };
 
+let signedInUser = null;
+
+function userMenu() {
+  const name = signedInUser?.display_name || signedInUser?.email || "User";
+  return `<span class="user-menu"><span>◉ ${escapeHtml(name)}</span><button type="button" id="logout-button">Sign out</button></span>`;
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -56,7 +63,7 @@ function navigationIcon(name) {
 }
 
 function shell(content) {
-  queueMicrotask(() => { void initializeMiniPlayer(); });
+  queueMicrotask(() => { void initializeMiniPlayer(); initializeUserMenu(); });
   return `
     <div class="app-frame">
       <aside class="sidebar">
@@ -80,6 +87,81 @@ function shell(content) {
       <nav class="mobile-navigation" aria-label="Mobile navigation">${navigation()}</nav>
     </div>
 `;
+}
+
+function initializeUserMenu() {
+  document.querySelector("#logout-button")?.addEventListener("click", async () => {
+    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => null);
+    signedInUser = null;
+    window.localStorage.removeItem("ai-reader:last-book-id");
+    window.location.assign("/login");
+  });
+}
+
+function renderAuth() {
+  const registering = window.location.pathname === "/register";
+  document.querySelector("#app").innerHTML = `
+    <main class="auth-page"><section class="auth-card" aria-labelledby="auth-heading">
+      <a class="brand auth-brand" href="/login" aria-label="AI Reader"><span>AI</span>READER<small>TURN PDFS INTO KNOWLEDGE.</small></a>
+      <p class="auth-eyebrow">YOUR PRIVATE LISTENING SPACE</p><h1 id="auth-heading">${registering ? "CREATE ACCOUNT" : "WELCOME BACK"}</h1>
+      <p class="auth-copy">${registering ? "Save your library, narration preferences, progress, and usage under your own account." : "Sign in to access your personal library."}</p>
+      <div class="auth-tabs"><a class="${registering ? "" : "is-active"}" href="/login">Sign in</a><a class="${registering ? "is-active" : ""}" href="/register">Create account</a></div>
+      <form id="auth-form" class="auth-form" novalidate>
+        ${registering ? '<label>Display name<input name="display_name" autocomplete="name" minlength="2" maxlength="80" required><small data-error="display_name">Use 2–80 characters.</small></label>' : ""}
+        <label>Email<input name="email" type="email" autocomplete="email" maxlength="320" required><small data-error="email">Enter a valid email address.</small></label>
+        <label>Password<input name="password" type="password" autocomplete="${registering ? "new-password" : "current-password"}" ${registering ? 'minlength="12"' : ""} maxlength="128" required><small data-error="password">${registering ? "Use 12+ characters with uppercase, lowercase, and a number." : "Enter your password."}</small></label>
+        ${registering ? '<label>Confirm password<input name="password_confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><small data-error="password_confirmation">Passwords must match.</small></label>' : ""}
+        <p id="auth-status" class="auth-status" role="alert" aria-live="polite"></p>
+        <button class="button button--wide" type="submit">${registering ? "CREATE ACCOUNT" : "SIGN IN"}</button>
+      </form>
+      <p class="auth-switch">${registering ? 'Already have an account? <a href="/login">Sign in</a>' : 'New to AI Reader? <a href="/register">Create an account</a>'}</p>
+    </section></main>`;
+
+  const form = document.querySelector("#auth-form");
+  const statusMessage = document.querySelector("#auth-status");
+  const inputs = [...form.querySelectorAll("input")];
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const validate = () => {
+    const values = Object.fromEntries(new FormData(form).entries());
+    const validity = {
+      display_name: !registering || String(values.display_name || "").trim().length >= 2,
+      email: emailPattern.test(String(values.email || "").trim()),
+      password: registering
+        ? /[a-z]/.test(String(values.password || "")) && /[A-Z]/.test(String(values.password || "")) && /\d/.test(String(values.password || "")) && String(values.password || "").length >= 12
+        : String(values.password || "").length > 0,
+      password_confirmation: !registering || (String(values.password_confirmation || "").length >= 12 && values.password === values.password_confirmation),
+    };
+    inputs.forEach((input) => {
+      const valid = validity[input.name];
+      const touched = input.value.length > 0 || input.dataset.touched === "true";
+      input.closest("label").classList.toggle("is-valid", Boolean(valid) && touched);
+      input.closest("label").classList.toggle("is-invalid", !valid && touched);
+      input.setAttribute("aria-invalid", String(!valid && touched));
+    });
+    return Object.values(validity).every(Boolean);
+  };
+  inputs.forEach((input) => {
+    input.addEventListener("input", validate);
+    input.addEventListener("blur", () => { input.dataset.touched = "true"; validate(); });
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    inputs.forEach((input) => { input.dataset.touched = "true"; });
+    if (!validate()) { statusMessage.textContent = "Please correct the highlighted fields."; return; }
+    statusMessage.textContent = registering ? "Creating your account…" : "Signing you in…";
+    const payload = Object.fromEntries(new FormData(form).entries());
+    try {
+      const response = await fetch(`/api/v1/auth/${registering ? "register" : "login"}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.detail || "Authentication could not be completed.");
+      signedInUser = body;
+      window.location.assign("/library");
+    } catch (error) {
+      statusMessage.textContent = error.message || "Authentication could not be completed.";
+    }
+  });
 }
 
 async function initializeMiniPlayer() {
@@ -251,7 +333,7 @@ function renderBookCard(book) {
 async function renderLibrary() {
   const app = document.querySelector("#app");
   app.innerHTML = shell(`
-    <header class="topbar"><span>Web / Desktop (Library)</span><span>◉ USER⌄</span></header>
+    <header class="topbar"><span>Web / Desktop (Library)</span>${userMenu()}</header>
     <header class="library-header">
       <div><h1>LIBRARY</h1><p>Your books, always with you.</p></div>
       <div class="library-actions"><label class="search"><span>⌕</span><input id="library-search" type="search" placeholder="Search books..." /></label><a class="button" href="/upload">＋ ADD BOOK</a></div>
@@ -319,7 +401,7 @@ async function renderLibrary() {
 
 async function renderUpload() {
   document.querySelector("#app").innerHTML = shell(`
-    <header class="topbar"><span>Web / Desktop (Add Book)</span><span>◉ USER⌄</span></header>
+    <header class="topbar"><span>Web / Desktop (Add Book)</span>${userMenu()}</header>
     <form id="upload-form" class="feature-page add-book-page">
       <a class="back-link" href="/library">← Library</a><h1>ADD BOOK</h1><p>Turn your technical PDF into an audiobook.</p>
       <label class="drop-zone" id="drop-zone"><b>⇧</b><strong>Drag & drop your PDF here</strong><span>or tap to select a file</span><small>PDF only · up to 100 MB and 500 pages</small><input id="pdf-file" type="file" accept="application/pdf" hidden></label>
@@ -558,7 +640,7 @@ async function renderUpload() {
 
 async function renderSettings() {
   document.querySelector("#app").innerHTML = shell(`
-    <header class="topbar"><span>Web / Desktop (Settings)</span><span>◉ USER⌄</span></header>
+    <header class="topbar"><span>Web / Desktop (Settings)</span>${userMenu()}</header>
     <form id="preferences-form" class="feature-page settings-page"><a class="back-link" href="/library">← Library</a><h1>SETTINGS</h1><p>Choose defaults for books you process next.</p>
       <div class="settings-tabs" role="tablist" aria-label="Settings sections"><button type="button" id="settings-tab-narration" role="tab" aria-controls="settings-panel-narration" aria-selected="true" data-settings-tab="narration">Narration</button><button type="button" id="settings-tab-processing" role="tab" aria-controls="settings-panel-processing" aria-selected="false" data-settings-tab="processing">Processing</button><button type="button" id="settings-tab-usage" role="tab" aria-controls="settings-panel-usage" aria-selected="false" data-settings-tab="usage">Usage &amp; cost</button></div>
       <section id="settings-panel-narration" class="settings-tab-panel" role="tabpanel" aria-labelledby="settings-tab-narration" data-settings-panel="narration"><label class="voice-setting">Reading language<select name="reading_language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="de">German</option></select></label><label class="voice-setting">Voice<select name="voice"><option value="alloy">Alloy</option><option value="ash">Ash</option><option value="ballad">Ballad</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="echo">Echo</option><option value="fable">Fable</option><option value="marin">Marin</option><option value="nova">Nova</option><option value="onyx">Onyx</option><option value="sage">Sage</option><option value="shimmer">Shimmer</option><option value="verse">Verse</option></select></label><p class="settings-warning">Changing the voice or language affects new books only. Existing books require audio reprocessing.</p><label class="voice-setting">Speech speed<select name="speed"><option value="normal">Normal</option><option value="slow">Slow</option></select></label><label class="voice-setting">Reading style<select name="style"><option value="calm">Calm</option><option value="neutral">Neutral</option><option value="expressive">Expressive</option></select></label></section>
@@ -659,7 +741,7 @@ function formatPlaybackTime(seconds) {
 
 async function renderBookPage() {
   document.querySelector("#app").innerHTML = shell(`
-    <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
+    <header class="topbar"><span>Web / Desktop (Player)</span>${userMenu()}</header>
     <section class="feature-page player-page"><a class="back-link" href="/library">← Library</a><div class="player-heading"><span id="player-cover" class="book-cover book-cover--2"><b>A</b><i></i></span><div class="player-heading__details"><h1 id="player-title">LOADING BOOK</h1><p id="player-author">Technical audiobook</p><span id="player-status" class="book-card__meta">Loading audio segments…</span><div id="book-processing-progress" class="book-processing-progress" role="progressbar" aria-label="Book processing progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i><span id="book-processing-percent">0%</span></div><section id="processing-controls" class="processing-controls" hidden><span id="processing-control-note"></span><div><button type="button" id="pause-processing">Pause</button><button type="button" id="resume-processing" hidden>Resume</button><button type="button" id="cancel-processing">Cancel</button><label>Process through page <input id="extend-end-page" type="number" min="1"></label><button type="button" id="extend-processing">Process more</button></div><div class="append-part"><label>Add continuation PDF <input id="append-part-file" type="file" accept="application/pdf"></label><button type="button" id="append-part">ADD PART</button></div></section></div><button type="button" id="open-chapters" class="open-chapters" aria-controls="chapter-navigation" aria-expanded="false">☰ Chapters</button></div>
     <div class="player-workspace"><div class="player-main"><section class="player-panel" aria-label="Audiobook player"><p id="chunk-label" class="chunk-label">No audio segment selected</p><audio id="book-audio" preload="metadata"></audio><label class="seek-label" for="player-seek"><span id="current-time">0:00</span><input id="player-seek" type="range" min="0" max="0" value="0" step="0.1" disabled><span id="total-time">0:00</span></label><div class="player-controls"><button type="button" data-skip="-15" aria-label="Rewind 15 seconds" disabled>↺15</button><button type="button" id="previous-chunk" aria-label="Previous audio segment" disabled>◀◀</button><button type="button" id="play-pause" class="play" aria-label="Play" disabled>▶</button><button type="button" id="next-chunk" aria-label="Next audio segment" disabled>▶▶</button><button type="button" data-skip="15" aria-label="Skip 15 seconds" disabled>15↻</button></div><div class="player-settings"><label class="volume-setting" for="player-volume">Volume <input id="player-volume" type="range" min="0" max="1" value="1" step="0.01" aria-describedby="volume-value"><output id="volume-value" for="player-volume">100%</output></label><label class="speed-setting" for="playback-speed">Playback speed<select id="playback-speed" disabled><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div></section></div>
     <div id="chapters-backdrop" class="chapters-backdrop" hidden></div><aside id="chapter-navigation" class="chapter-navigation" aria-labelledby="chapters-heading"><div class="chapter-navigation__title"><div><h2 id="chapters-heading">CHAPTERS</h2><p id="chapter-summary">Loading book structure…</p></div><div class="chapter-navigation__controls"><button type="button" id="previous-chapter" aria-label="Previous chapter" disabled>←</button><button type="button" id="next-chapter" aria-label="Next chapter" disabled>→</button><button type="button" id="close-chapters" class="close-chapters" aria-label="Close chapters">×</button></div></div><ol id="chapter-list" class="chapter-list" aria-live="polite"></ol><p id="next-available-chunk" class="next-available-chunk">Checking the next available chunk…</p></aside></div>
@@ -1144,7 +1226,7 @@ async function renderBookPage() {
 
 async function renderPlayerLanding() {
   document.querySelector("#app").innerHTML = shell(`
-    <header class="topbar"><span>Web / Desktop (Player)</span><span>◉ USER⌄</span></header>
+    <header class="topbar"><span>Web / Desktop (Player)</span>${userMenu()}</header>
     <section class="feature-page"><a class="back-link" href="/library">← Library</a><h1>PLAYER</h1><p id="player-landing-status">Opening your most recent book…</p></section>
   `);
 
@@ -1193,20 +1275,37 @@ window.setInterval(refreshGlobalProcessing, 7000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshGlobalProcessing(); });
 window.addEventListener("pageshow", refreshGlobalProcessing);
 
-if (window.location.pathname === "/library") {
-  renderLibrary();
-} else if (window.location.pathname === "/upload") {
-  renderUpload();
-} else if (window.location.pathname === "/player") {
-  renderPlayerLanding();
-} else if (window.location.pathname === "/settings") {
-  renderSettings();
-} else if (window.location.pathname.startsWith("/books/")) {
-  renderBookPage();
-} else {
-  const page = currentPage(window.location.pathname);
-  document.querySelector("#app").innerHTML = shell(`
-    <h1>${page.title}</h1>
-    <section class="placeholder"><p>${page.description}</p></section>
-  `);
+async function bootstrapApplication() {
+  if (window.location.pathname === "/login" || window.location.pathname === "/register") {
+    renderAuth();
+    return;
+  }
+  try {
+    const response = await fetch("/api/v1/auth/me", { signal: AbortSignal.timeout(10_000) });
+    if (response.status === 401) {
+      window.history.replaceState({}, "", "/login");
+      renderAuth();
+      return;
+    }
+    if (!response.ok) throw new Error("Session unavailable");
+    signedInUser = await response.json();
+  } catch (error) {
+    document.querySelector("#app").innerHTML = '<main class="auth-page"><p class="auth-status">Unable to verify your session. Please refresh the page.</p></main>';
+    return;
+  }
+  if (window.location.pathname === "/library") {
+    renderLibrary();
+  } else if (window.location.pathname === "/upload") {
+    renderUpload();
+  } else if (window.location.pathname === "/player") {
+    renderPlayerLanding();
+  } else if (window.location.pathname === "/settings") {
+    renderSettings();
+  } else if (window.location.pathname.startsWith("/books/")) {
+    renderBookPage();
+  } else {
+    window.location.replace("/library");
+  }
 }
+
+void bootstrapApplication();

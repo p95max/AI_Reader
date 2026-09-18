@@ -1,4 +1,6 @@
-"""Read and apply durable narration preferences for the local MVP user."""
+"""Read and apply durable narration preferences for an authenticated user."""
+
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,13 +8,11 @@ from app.core.config import Settings, get_settings
 from app.models.book import Book
 from app.models.user_preferences import UserPreferences
 from app.schemas.books import NarrationPreferences
-from app.services.books.ownership import get_local_user_id
 
 
 async def get_or_create_user_preferences(
-    session: AsyncSession, settings: Settings | None = None
+    session: AsyncSession, user_id: UUID, settings: Settings | None = None
 ) -> UserPreferences:
-    user_id = await get_local_user_id(session)
     preferences = await session.get(UserPreferences, user_id)
     if preferences is None:
         settings = settings or get_settings()

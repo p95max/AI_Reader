@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     app_name: str = "AI Reader API"
     environment: Literal["local", "development", "staging", "production"] = "local"
     debug: bool = False
+    auth_secret_key: SecretStr = SecretStr("change-this-local-development-secret-before-production")
+    auth_session_hours: int = Field(default=168, ge=1, le=24 * 90)
+    auth_cookie_secure: bool = False
     database_url: str = "postgresql+psycopg://ai_reader:ai_reader@localhost:5433/ai_reader"
     database_echo: bool = False
     redis_url: str = "redis://localhost:6379/0"
@@ -79,6 +82,12 @@ class Settings(BaseSettings):
             output_per_million_tokens=self.ai_output_cost_per_million_tokens,
             version=self.ai_pricing_version,
         )
+
+    def validate_auth_configuration(self) -> None:
+        """Reject the development signing secret when the service is exposed."""
+        insecure_secret = self.auth_secret_key.get_secret_value().startswith("change-this-")
+        if self.environment in {"staging", "production"} and insecure_secret:
+            raise ValueError("AI_READER_AUTH_SECRET_KEY must be set outside local development")
 
 
 @lru_cache

@@ -25,6 +25,7 @@ from app.models.book import Book, BookStatus
 from app.models.book_part import BookPart
 from app.models.chapter import Chapter, ContentChunk, ProcessingStatus
 from app.models.playback_state import PlaybackState
+from app.models.user import User
 from app.schemas.books import (
     BookAudioChunkRead,
     BookCostRead,
@@ -38,11 +39,13 @@ from app.schemas.books import (
     PlaybackPositionRead,
     PlaybackPositionUpdate,
 )
+from app.services.authentication import get_current_user
 from app.services.books.book_cost import BookCostService
 from app.services.books.book_estimate import estimate_book_processing_with_pricing
 from app.services.books.book_library import build_book_library_item
 from app.services.books.book_metadata import extract_pdf_book_metadata
 from app.services.books.book_progress import BookProgressService
+from app.services.books.ownership import get_owned_book
 from app.services.books.usage_summary import UsageSummaryService
 from app.services.books.user_preferences import (
     apply_preferences_to_book,
@@ -106,11 +109,12 @@ async def estimate_processing(
 async def estimate_uploaded_processing(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
     start_page: Annotated[int, Query(ge=1)] = 1,
     end_page: Annotated[int | None, Query(ge=1)] = None,
 ) -> BookProcessingEstimateRead:
     """Estimate the selected page range before it is submitted to the worker queue."""
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     resolved_end_page = end_page or book.page_count
@@ -147,10 +151,11 @@ async def estimate_uploaded_processing(
 @router.get("", response_model=list[BookLibraryItemRead])
 async def list_books(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
     query: Annotated[str | None, Query(max_length=255)] = None,
     filter: Annotated[BookStatus | None, Query()] = None,
 ) -> list[BookLibraryItemRead]:
-    books_query = select(Book).order_by(Book.created_at.desc())
+    books_query = select(Book).where(Book.user_id == user.id).order_by(Book.created_at.desc())
     if query:
         books_query = books_query.where(Book.title.ilike(f"%{query.strip()}%"))
     if filter in (BookStatus.PROCESSING, BookStatus.READY):
@@ -215,8 +220,9 @@ async def list_books(
 @router.get("/usage-summary", response_model=BookUsageSummaryRead)
 async def get_usage_summary(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookUsageSummaryRead:
-    summary = await UsageSummaryService(session).get()
+    summary = await UsageSummaryService(session).get(user.id)
     return BookUsageSummaryRead(
         total_books=summary.total_books,
         input_tokens=summary.input_tokens,
@@ -251,8 +257,9 @@ async def get_usage_summary(
 async def get_book(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Book:
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     return book
@@ -263,7 +270,10 @@ async def get_book(
 async def get_book_usage(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookCostRead:
+    if await get_owned_book(session, book_id, user.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     try:
         cost = await BookCostService(session).get(book_id)
     except LookupError as error:
@@ -277,8 +287,9 @@ async def get_book_usage(
 async def list_ready_audio_chunks(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> list[BookAudioChunkRead]:
-    if await session.get(Book, book_id) is None:
+    if await get_owned_book(session, book_id, user.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
 
     chunks = tuple(
@@ -309,7 +320,10 @@ async def stream_audio_chunk(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
+    if await get_owned_book(session, book_id, user.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio chunk not found")
     chunk = await session.scalar(
         select(AudioChunk).where(
             AudioChunk.id == chunk_id,
@@ -357,8 +371,9 @@ async def stream_audio_chunk(
 async def get_playback_position(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> PlaybackPositionRead:
-    if await session.get(Book, book_id) is None:
+    if await get_owned_book(session, book_id, user.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     playback = await session.get(PlaybackState, book_id)
     if playback is None:
@@ -376,8 +391,9 @@ async def save_playback_position(
     book_id: UUID,
     payload: PlaybackPositionUpdate,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> PlaybackPositionRead:
-    if await session.get(Book, book_id) is None:
+    if await get_owned_book(session, book_id, user.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     audio_chunk = await session.scalar(
         select(AudioChunk).where(
@@ -411,8 +427,9 @@ async def save_playback_position(
 async def get_book_progress(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookProgressRead:
-    if await session.get(Book, book_id) is None:
+    if await get_owned_book(session, book_id, user.id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
 
     progress = await BookProgressService(session).get(book_id)
@@ -426,6 +443,7 @@ async def create_book(
     file: Annotated[UploadFile, File(description="Technical PDF to process")],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Book:
     if file.content_type != "application/pdf":
         await file.close()
@@ -471,9 +489,9 @@ async def create_book(
         pricing=pricing,
         tts_cost_per_audio_hour_usd=settings.tts_external_cost_per_audio_hour_usd,
     )
-    preferences = await get_or_create_user_preferences(session, settings)
+    preferences = await get_or_create_user_preferences(session, user.id, settings)
     book = Book(
-        user_id=preferences.user_id,
+        user_id=user.id,
         title=extracted_metadata.title,
         author=extracted_metadata.author,
         publication_year=extracted_metadata.publication_year,
@@ -529,7 +547,10 @@ async def create_book(
 async def list_book_parts(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> list[BookPart]:
+    if await get_owned_book(session, book_id, user.id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     return list(
         (
             await session.scalars(
@@ -547,9 +568,10 @@ async def append_book_part(
     file: Annotated[UploadFile, File(description="Continuation PDF")],
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookPart:
     """Store, but do not process, a PDF that continues an existing book."""
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     if file.content_type != "application/pdf":
@@ -599,8 +621,9 @@ async def process_book_part(
     book_id: UUID,
     part_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Book:
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     part = await session.get(BookPart, part_id)
     if book is None or part is None or part.book_id != book_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book part not found")
@@ -627,16 +650,17 @@ async def start_book_processing(
     book_id: UUID,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
     payload: BookProcessingRequest | None = None,
 ) -> Book:
     """Queue PDF structure extraction after the client confirms processing settings."""
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     if book.status == BookStatus.PROCESSING and not book.processing_paused:
         return book
 
-    preferences = payload or await get_or_create_user_preferences(session)
+    preferences = payload or await get_or_create_user_preferences(session, user.id)
     apply_preferences_to_book(book, preferences)
     start_page = payload.start_page if payload else book.processing_start_page
     end_page = payload.end_page if payload and payload.end_page else book.processing_end_page
@@ -670,9 +694,10 @@ async def start_book_processing(
 async def pause_book_processing(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Book:
     """Pause new narration and TTS work without deleting ready audio."""
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
     book.processing_paused = True
@@ -691,9 +716,10 @@ async def pause_book_processing(
 async def cancel_book_processing(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Book:
     """Stop pending work while retaining the PDF and any audio already generated."""
-    book = await pause_book_processing(book_id, session)
+    book = await pause_book_processing(book_id, session, user)
     book.status = BookStatus.UPLOADED
     book.processing_paused = False
     await session.commit()
@@ -706,8 +732,9 @@ async def delete_book(
     book_id: UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     storage: Annotated[ObjectStorage, Depends(get_object_storage)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> Response:
-    book = await session.get(Book, book_id)
+    book = await get_owned_book(session, book_id, user.id)
     if book is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
 

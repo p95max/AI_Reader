@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.models.user import User
 from app.schemas.books import UserPreferencesRead, UserPreferencesUpdate
+from app.services.authentication import get_current_user
 from app.services.books.user_preferences import get_or_create_user_preferences
 
 router = APIRouter()
@@ -13,9 +15,10 @@ router = APIRouter()
 @router.get("/preferences", response_model=UserPreferencesRead)
 async def get_preferences(
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> UserPreferencesRead:
-    """Return the local user's defaults for future book processing."""
-    preferences = await get_or_create_user_preferences(session)
+    """Return this user's defaults for future book processing."""
+    preferences = await get_or_create_user_preferences(session, user.id)
     await session.commit()
     await session.refresh(preferences)
     return UserPreferencesRead.model_validate(preferences)
@@ -25,9 +28,10 @@ async def get_preferences(
 async def update_preferences(
     payload: UserPreferencesUpdate,
     session: Annotated[AsyncSession, Depends(get_db_session)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> UserPreferencesRead:
     """Save defaults; each book copies them when its processing starts."""
-    preferences = await get_or_create_user_preferences(session)
+    preferences = await get_or_create_user_preferences(session, user.id)
     for field, value in payload.model_dump().items():
         setattr(preferences, field, getattr(value, "value", value))
     await session.commit()

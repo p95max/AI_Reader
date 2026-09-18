@@ -16,6 +16,7 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import limiter
 
 settings = get_settings()
+settings.validate_auth_configuration()
 configure_logging(debug=settings.debug)
 WEB_ROOT = Path(__file__).parent / "web"
 logger = structlog.get_logger(__name__)
@@ -71,6 +72,8 @@ async def root() -> RedirectResponse:
 @app.get("/upload", include_in_schema=False)
 @app.get("/player", include_in_schema=False)
 @app.get("/settings", include_in_schema=False)
+@app.get("/login", include_in_schema=False)
+@app.get("/register", include_in_schema=False)
 @app.get("/books/{book_id}", include_in_schema=False)
 async def frontend_page() -> FileResponse:
     """Serve the SPA for every public application route, including deep links."""

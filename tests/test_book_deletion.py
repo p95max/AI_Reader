@@ -4,6 +4,7 @@ import pytest
 
 from app.api.v1.routes.books import delete_book
 from app.models.book import Book
+from app.models.user import User
 
 
 class FakeSession:
@@ -12,7 +13,7 @@ class FakeSession:
         self.deleted: list[Book] = []
         self.committed = False
 
-    async def get(self, _model: object, _book_id: UUID) -> Book:
+    async def scalar(self, _statement: object) -> Book:
         return self.book
 
     async def delete(self, book: Book) -> None:
@@ -45,7 +46,8 @@ async def test_delete_book_removes_entire_storage_prefix_before_database_record(
     session = FakeSession(book)
     storage = FakeStorage()
 
-    response = await delete_book(book_id, session, storage)  # type: ignore[arg-type]
+    user = User(id=UUID("87654321-4321-8765-4321-876543218765"), email="reader@example.com")
+    response = await delete_book(book_id, session, storage, user)  # type: ignore[arg-type]
 
     assert response.status_code == 204
     assert storage.deleted_prefixes == [f"books/{book_id}/"]

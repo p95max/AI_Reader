@@ -9,12 +9,14 @@ from app.db.base import Base
 
 
 class User(Base):
-    """Minimal ownership record; authentication is intentionally a later MVP stage."""
+    """Account and ownership record for one AI Reader user."""
 
     __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

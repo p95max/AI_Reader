@@ -46,12 +46,14 @@ class UsageSummaryService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self) -> UsageSummary:
+    async def get(self, user_id: UUID) -> UsageSummary:
         llm_usage = (
             select(
                 LLMUsageRecord.book_id.label("book_id"),
                 func.coalesce(func.sum(LLMUsageRecord.input_tokens), 0).label("input_tokens"),
-                func.coalesce(func.sum(LLMUsageRecord.cached_input_tokens), 0).label("cached_input_tokens"),
+                func.coalesce(func.sum(LLMUsageRecord.cached_input_tokens), 0).label(
+                    "cached_input_tokens"
+                ),
                 func.coalesce(func.sum(LLMUsageRecord.output_tokens), 0).label("output_tokens"),
                 func.coalesce(func.sum(LLMUsageRecord.calculated_cost_usd), 0).label("ai_cost_usd"),
                 func.count(LLMUsageRecord.id).label("request_count"),
@@ -63,7 +65,9 @@ class UsageSummaryService:
             select(
                 AudioChunk.book_id.label("book_id"),
                 func.coalesce(func.sum(AudioChunk.tts_cost_usd), 0).label("tts_cost_usd"),
-                func.coalesce(func.sum(AudioChunk.duration_milliseconds), 0).label("audio_milliseconds"),
+                func.coalesce(func.sum(AudioChunk.duration_milliseconds), 0).label(
+                    "audio_milliseconds"
+                ),
             )
             .where(AudioChunk.status == AudioChunkStatus.READY)
             .group_by(AudioChunk.book_id)
@@ -86,6 +90,7 @@ class UsageSummaryService:
                 )
                 .outerjoin(llm_usage, llm_usage.c.book_id == Book.id)
                 .outerjoin(tts_usage, tts_usage.c.book_id == Book.id)
+                .where(Book.user_id == user_id)
                 .order_by(Book.created_at.desc())
             )
         ).all()

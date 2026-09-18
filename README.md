@@ -18,6 +18,11 @@ Hugging Face model cache.
 Open `http://127.0.0.1:8000` (or the configured `APP_PORT`). API documentation
 is available at `http://127.0.0.1:8000/docs`.
 
+On first visit, create an account at `/register`. Each account has an isolated
+library, listening position, preferences, and usage totals. Before deploying
+outside local development, set `AI_READER_AUTH_SECRET_KEY` to a unique random
+value and set `AI_READER_AUTH_COOKIE_SECURE=true` behind HTTPS.
+
 Useful commands:
 
 ```bash
