@@ -95,6 +95,7 @@ async def estimate_processing(
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
         estimated_tts_cost_usd=estimate.estimated_tts_cost_usd,
         estimated_total_cost_usd=estimate.estimated_total_cost_usd,
+        tts_budget_usd=settings.tts_max_book_cost_usd,
         estimated_audio_seconds=estimate.estimated_audio_seconds,
         model_name=settings.ai_model,
         pricing_version=pricing.version,
@@ -136,6 +137,7 @@ async def estimate_uploaded_processing(
         estimated_ai_cost_usd=estimate.estimated_ai_cost_usd,
         estimated_tts_cost_usd=estimate.estimated_tts_cost_usd,
         estimated_total_cost_usd=estimate.estimated_total_cost_usd,
+        tts_budget_usd=get_settings().tts_max_book_cost_usd,
         estimated_audio_seconds=estimate.estimated_audio_seconds,
         model_name=get_settings().ai_model,
         pricing_version=pricing.version,
@@ -637,7 +639,7 @@ async def start_book_processing(
     preferences = payload or await get_or_create_user_preferences(session)
     apply_preferences_to_book(book, preferences)
     start_page = payload.start_page if payload else book.processing_start_page
-    end_page = (payload.end_page if payload and payload.end_page else book.processing_end_page)
+    end_page = payload.end_page if payload and payload.end_page else book.processing_end_page
     if start_page > end_page or end_page > book.page_count:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

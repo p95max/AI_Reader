@@ -6,7 +6,11 @@ import pytest
 from app.core.config import Settings
 from app.services.audio.audio_chunk_store import VoiceMismatchError
 from app.services.audio.audio_generation import GeneratedAudioChunk
-from app.services.audio.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
+from app.services.audio.resilient_tts import (
+    AudioChunkProcessingError,
+    ResilientTTSProcessor,
+    TTSBudgetLimitExceeded,
+)
 from app.services.audio.tts import SpeechSpeed, TTSError
 from app.services.audio.tts_usage import TTSUsageCostCalculator
 
@@ -57,6 +61,9 @@ class MemoryCheckpointStore:
 
     async def is_ready(self, _book_id: UUID, chunk_index: int) -> bool:
         return chunk_index in self.ready
+
+    async def ready_tts_cost_usd(self, _book_id: UUID) -> float:
+        return sum(call[4] for call in self.ready_calls)
 
     async def mark_ready(
         self,
@@ -177,3 +184,29 @@ async def test_failed_checkpoint_removes_uploaded_audio_object() -> None:
         )
 
     assert generator.deleted_storage_keys == [f"books/{BOOK_ID}/audio/000000.wav"]
+
+
+@pytest.mark.asyncio
+async def test_tts_budget_blocks_provider_request_before_new_audio_is_charged() -> None:
+    generator = FakeGenerator()
+    store = MemoryCheckpointStore()
+    processor = ResilientTTSProcessor(
+        generator,
+        store,  # type: ignore[arg-type]
+        cost_calculator=TTSUsageCostCalculator(
+            Settings(tts_external_cost_per_audio_hour_usd=3_600)
+        ),
+    )
+
+    with pytest.raises(TTSBudgetLimitExceeded, match="budget"):
+        await processor.process(
+            BOOK_ID,
+            "narration",
+            voice="Narrator",
+            speed=SpeechSpeed.NORMAL,
+            attempt_count=1,
+            max_tts_cost_usd=0.5,
+        )
+
+    assert generator.generated_indexes == []
+    assert store.ready_calls == []

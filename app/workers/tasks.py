@@ -15,7 +15,11 @@ from app.services.ai.ai_adapter import AIRequest, OpenAIAdapter, UsageContext
 from app.services.ai.technical_narrator import CodeMode, NarrationSettings, TechnicalNarrator
 from app.services.audio.audio_chunk_store import SQLAlchemyAudioChunkStore
 from app.services.audio.audio_generation import AudioChunkGenerator, NarrationChunker
-from app.services.audio.resilient_tts import AudioChunkProcessingError, ResilientTTSProcessor
+from app.services.audio.resilient_tts import (
+    AudioChunkProcessingError,
+    ResilientTTSProcessor,
+    TTSBudgetLimitExceeded,
+)
 from app.services.audio.tts import ReadingStyle, SpeechRequest, SpeechSpeed, get_tts_synthesizer
 from app.services.audio.tts_usage import TTSUsageCostCalculator
 from app.services.documents.book_structure import (
@@ -233,6 +237,7 @@ async def _plan_book_processing(book_id: UUID) -> dict[str, object]:
 )
 def narrate_content_chunk(self, content_chunk_id: str) -> dict[str, str]:
     """Adapt one durable PDF fragment, then delegate speech generation to the TTS worker."""
+
     async def run():
         try:
             return await _narrate_content_chunk(UUID(content_chunk_id))
@@ -245,6 +250,7 @@ def narrate_content_chunk(self, content_chunk_id: str) -> dict[str, str]:
             ):
                 await _mark_content_chunk_failed(UUID(content_chunk_id))
             raise
+
     return asyncio.run(run())
 
 
@@ -323,9 +329,7 @@ async def _narrate_content_chunk(content_chunk_id: UUID) -> dict[str, str]:
         )
         narration = response.text
     validate_narration(narration)
-    synthesize_content_chunk.apply_async(
-        args=[str(content_chunk.id), narration], queue="tts"
-    )
+    synthesize_content_chunk.apply_async(args=[str(content_chunk.id), narration], queue="tts")
     logger.info(
         "book_processing_stage_finished",
         book_id=str(book.id),
@@ -462,15 +466,20 @@ async def _synthesize_content_chunk(
         SQLAlchemyAudioChunkStore(),
         cost_calculator=TTSUsageCostCalculator(settings),
     )
-    chunks = await processor.process(
-        book.id,
-        narration,
-        voice=book.tts_voice or settings.tts_voice,
-        speed=SpeechSpeed(book.tts_speed),
-        style=ReadingStyle(book.tts_style),
-        attempt_count=attempt_count,
-        start_chunk_index=base_index,
-    )
+    try:
+        chunks = await processor.process(
+            book.id,
+            narration,
+            voice=book.tts_voice or settings.tts_voice,
+            speed=SpeechSpeed(book.tts_speed),
+            style=ReadingStyle(book.tts_style),
+            attempt_count=attempt_count,
+            start_chunk_index=base_index,
+            max_tts_cost_usd=settings.tts_max_book_cost_usd,
+        )
+    except TTSBudgetLimitExceeded as error:
+        await _pause_for_tts_budget(book.id, content_chunk_id, str(error))
+        return {"content_chunk_id": str(content_chunk_id), "status": "budget_limit"}
     async with SessionLocal() as session:
         content_chunk = await session.get(ContentChunk, content_chunk_id)
         if content_chunk is None:
@@ -489,6 +498,30 @@ async def _synthesize_content_chunk(
         "content_chunk_id": str(content_chunk_id),
         "chunks": [chunk.as_task_payload() for chunk in chunks],
     }
+
+
+async def _pause_for_tts_budget(book_id: UUID, content_chunk_id: UUID, reason: str) -> None:
+    """Pause a book safely when its configured external-TTS cap is reached."""
+    async with SessionLocal() as session:
+        book = await session.get(Book, book_id)
+        if book is None:
+            return
+        book.processing_paused = True
+        await session.execute(
+            update(ContentChunk)
+            .where(ContentChunk.id == content_chunk_id)
+            .values(status=ProcessingStatus.QUEUED)
+        )
+        await session.execute(
+            update(ContentChunk)
+            .where(
+                ContentChunk.chapter_id.in_(select(Chapter.id).where(Chapter.book_id == book_id))
+            )
+            .where(ContentChunk.status == ProcessingStatus.PROCESSING)
+            .values(status=ProcessingStatus.QUEUED)
+        )
+        await session.commit()
+    logger.warning("book_processing_paused_for_tts_budget", book_id=str(book_id), reason=reason)
 
 
 async def _mark_content_chunk_failed(content_chunk_id: UUID) -> None:
@@ -548,6 +581,7 @@ def generate_audio_chunks(
     style: str | None = None,
 ) -> dict[str, object]:
     """Generate TTS chunks with per-chunk checkpoints and retry support."""
+
     def run() -> dict[str, object]:
         parsed_book_id = UUID(book_id)
         settings = get_settings()

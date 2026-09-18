@@ -10,6 +10,7 @@ def test_default_infrastructure_urls() -> None:
     assert settings.celery_broker_url.startswith("redis://")
     assert settings.max_pdf_pages == 500
     assert settings.upload_rate_limit == "5/minute"
+    assert settings.tts_max_book_cost_usd == 5
 
 
 def test_celery_uses_json_and_tracks_started_tasks() -> None:

@@ -43,3 +43,15 @@ class TTSUsageCostCalculator:
             generation_time_milliseconds=generation_time_milliseconds,
             external_cost_usd=round(external_cost, 8),
         )
+
+    def estimate_text_cost(self, text: str) -> float:
+        """Conservatively estimate one TTS request before it is sent to a provider."""
+        normalized = " ".join(text.split())
+        if not normalized:
+            return 0.0
+        estimated_tokens = max(1, round(len(normalized) / 4))
+        estimated_audio_milliseconds = round(estimated_tokens * 0.28 * 1_000)
+        return self.calculate(
+            generated_audio_milliseconds=estimated_audio_milliseconds,
+            generation_time_milliseconds=0,
+        ).total_cost_usd

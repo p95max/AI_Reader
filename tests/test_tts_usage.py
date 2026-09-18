@@ -20,6 +20,13 @@ def test_tts_usage_calculates_external_audio_cost() -> None:
     assert usage.total_cost_usd == pytest.approx(1.8)
 
 
+def test_tts_usage_estimates_cost_before_provider_request() -> None:
+    calculator = TTSUsageCostCalculator(Settings(tts_external_cost_per_audio_hour_usd=3.6))
+
+    assert calculator.estimate_text_cost("A short narration segment.") > 0
+    assert calculator.estimate_text_cost("   ") == 0
+
+
 @pytest.mark.parametrize("audio_ms,generation_ms", [(-1, 0), (0, -1)])
 def test_tts_usage_rejects_negative_durations(audio_ms: int, generation_ms: int) -> None:
     with pytest.raises(ValueError, match="durations must not be negative"):

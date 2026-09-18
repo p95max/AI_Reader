@@ -388,7 +388,9 @@ async function renderUpload() {
     document.querySelector("#estimate-tokens").textContent = `~ ${estimate.estimated_total_tokens.toLocaleString("en-US")}`;
     document.querySelector("#estimate-cost").textContent = `~ $${estimate.estimated_total_cost_usd.toFixed(2)}`;
     document.querySelector("#estimate-audio").textContent = formatAudioDuration(estimate.estimated_audio_seconds);
-    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)} · ${description}`;
+    const budget = Number(estimate.tts_budget_usd);
+    const budgetNote = budget > 0 ? ` · $${budget.toFixed(2)} TTS cap per book` : " · no TTS spending cap";
+    document.querySelector("#estimate-note").textContent = `AI ~$${estimate.estimated_ai_cost_usd.toFixed(4)} · TTS ~$${estimate.estimated_tts_cost_usd.toFixed(4)}${budgetNote} · ${description}`;
 
     const ttsCost = Number(estimate.estimated_tts_cost_usd);
     if (!uploadedBook || ttsCost <= 5) {

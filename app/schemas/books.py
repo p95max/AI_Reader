@@ -56,6 +56,7 @@ class BookProcessingEstimateRead(BaseModel):
     estimated_ai_cost_usd: float
     estimated_tts_cost_usd: float
     estimated_total_cost_usd: float
+    tts_budget_usd: float
     estimated_audio_seconds: int
     model_name: str
     pricing_version: str

@@ -23,6 +23,10 @@ class AudioChunkProcessingError(RuntimeError):
     """A retryable failure to generate one audio chunk."""
 
 
+class TTSBudgetLimitExceeded(RuntimeError):
+    """Raised before a provider request would exceed the book's TTS budget."""
+
+
 class ResilientTTSProcessor:
     """Generates only missing chunks and records every successful checkpoint."""
 
@@ -47,6 +51,7 @@ class ResilientTTSProcessor:
         attempt_count: int,
         style: ReadingStyle = ReadingStyle.NEUTRAL,
         start_chunk_index: int = 0,
+        max_tts_cost_usd: float = 0.0,
     ) -> list[GeneratedAudioChunk]:
         await self._store.ensure_voice(book_id, voice)
         generated: list[GeneratedAudioChunk] = []
@@ -57,6 +62,24 @@ class ResilientTTSProcessor:
                     "tts_chunk_skipped_ready", extra={"book_id": str(book_id), "chunk": chunk_index}
                 )
                 continue
+
+            if max_tts_cost_usd > 0 and self._cost_calculator is not None:
+                estimated_cost = self._cost_calculator.estimate_text_cost(text)
+                spent_cost = await self._store.ready_tts_cost_usd(book_id)
+                if spent_cost + estimated_cost > max_tts_cost_usd:
+                    logger.warning(
+                        "tts_budget_limit_reached",
+                        extra={
+                            "book_id": str(book_id),
+                            "chunk": chunk_index,
+                            "spent_cost_usd": spent_cost,
+                            "estimated_chunk_cost_usd": estimated_cost,
+                            "max_cost_usd": max_tts_cost_usd,
+                        },
+                    )
+                    raise TTSBudgetLimitExceeded(
+                        f"TTS budget of ${max_tts_cost_usd:.2f} reached for book {book_id}"
+                    )
 
             started_at = perf_counter()
             try:

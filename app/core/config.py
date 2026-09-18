@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     tts_openai_normal_speed: float = Field(default=1.0, ge=0.25, le=4.0)
     tts_openai_slow_speed: float = Field(default=0.85, ge=0.25, le=4.0)
     tts_external_cost_per_audio_hour_usd: float = Field(default=0.0, ge=0)
+    tts_max_book_cost_usd: float = Field(default=5.0, ge=0)
     tts_chunk_max_characters: int = Field(default=1_200, ge=100)
     tts_max_attempts: int = Field(default=3, ge=1)
     progressive_priority_chapter_count: int = Field(default=2, ge=1)

@@ -7,7 +7,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -21,6 +21,8 @@ class AudioChunkStore(Protocol):
     async def is_ready(self, book_id: UUID, chunk_index: int) -> bool: ...
 
     async def ensure_voice(self, book_id: UUID, voice: str) -> None: ...
+
+    async def ready_tts_cost_usd(self, book_id: UUID) -> float: ...
 
     async def mark_ready(
         self,
@@ -104,6 +106,16 @@ class SQLAlchemyAudioChunkStore:
             raise VoiceMismatchError(
                 f"Book {book_id} already has audio generated with voice '{stored_voice}'"
             )
+
+    async def ready_tts_cost_usd(self, book_id: UUID) -> float:
+        async with self._session_factory() as session:
+            cost = await session.scalar(
+                select(func.coalesce(func.sum(AudioChunk.tts_cost_usd), 0)).where(
+                    AudioChunk.book_id == book_id,
+                    AudioChunk.status == AudioChunkStatus.READY,
+                )
+            )
+        return float(cost or 0)
 
     async def mark_ready(
         self,

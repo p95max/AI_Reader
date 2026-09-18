@@ -62,6 +62,13 @@ estimate and an estimated TTS cost based on
 audio tokens, so the audio-hour value is only a planning approximation. Actual
 costs are recorded during processing at `GET /api/v1/books/{book_id}/cost`.
 
+To prevent an unexpectedly expensive full-book run, the worker applies the
+pre-flight limit in `AI_READER_TTS_MAX_BOOK_COST_USD` before sending each new
+TTS request. It defaults to `$5.00` per book and pauses processing when the
+next estimated segment would exceed the cap. Completed segments are retained;
+increase the limit and resume processing to continue. Set the value to `0` only
+when intentionally running without a TTS spending cap.
+
 The versioned LLM price list is configured in
 `AI_READER_AI_MODEL_PRICE_LIST`, with USD prices per one million tokens:
 
@@ -100,6 +107,19 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 ```
+
+## Public-domain PDF sources for manual testing
+
+No third-party books are stored in this repository. For manual PDF testing,
+download a file directly from its Project Gutenberg book page:
+
+- [The Tell-Tale Heart — Edgar Allan Poe](https://www.gutenberg.org/ebooks/2148)
+  (included in *The Works of Edgar Allan Poe — Volume 2*).
+- [Philochristus: Memoirs of a Disciple of the Lord — Edwin Abbott Abbott](https://www.gutenberg.org/ebooks/48843).
+
+These works are identified by Project Gutenberg as public domain in the USA.
+Before redistributing a downloaded Project Gutenberg file, review the licence
+embedded in that file and the copyright rules applicable in your jurisdiction.
 
 ## Repository structure
 
