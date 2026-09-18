@@ -10,13 +10,17 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Any, Protocol
 
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI
 
 from app.core.config import Settings, get_settings
 
 
 class TTSError(RuntimeError):
     """Raised when a configured TTS provider cannot synthesize speech."""
+
+
+class RetryableTTSError(TTSError):
+    """Raised when the OpenAI TTS request failed due to a transient transport issue."""
 
 
 class SpeechSpeed(StrEnum):
@@ -144,6 +148,8 @@ class OpenAITTSSynthesizer:
             )
         except TTSError:
             raise
+        except (APIConnectionError, APITimeoutError, TimeoutError, ConnectionError) as error:
+            raise RetryableTTSError(f"OpenAI TTS synthesis failed: {error}") from error
         except Exception as error:
             raise TTSError(f"OpenAI TTS synthesis failed: {error}") from error
 

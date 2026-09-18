@@ -4,35 +4,48 @@ x-app-environment: &app-environment
   AI_READER_APP_NAME: ${AI_READER_APP_NAME:-AI Reader API}
   AI_READER_ENVIRONMENT: ${AI_READER_ENVIRONMENT:-development}
   AI_READER_DEBUG: ${AI_READER_DEBUG:-true}
+
   AI_READER_AUTH_SECRET_KEY: ${AI_READER_AUTH_SECRET_KEY:-change-this-local-development-secret-before-production}
   AI_READER_AUTH_SESSION_HOURS: ${AI_READER_AUTH_SESSION_HOURS:-168}
   AI_READER_AUTH_COOKIE_SECURE: ${AI_READER_AUTH_COOKIE_SECURE:-false}
-  AI_READER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ai_reader}:${POSTGRES_PASSWORD:-ai_reader}@postgres:5432/${POSTGRES_DB:-ai_reader}
+
+  # Codespaces workaround:
+  # access infrastructure containers through published host ports
+  # instead of broken container-to-container bridge networking.
+  AI_READER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ai_reader}:${POSTGRES_PASSWORD:-ai_reader}@host.docker.internal:5432/${POSTGRES_DB:-ai_reader}
   AI_READER_DATABASE_ECHO: ${AI_READER_DATABASE_ECHO:-false}
-  AI_READER_REDIS_URL: redis://redis:6379/0
-  AI_READER_CELERY_BROKER_URL: redis://redis:6379/1
-  AI_READER_CELERY_RESULT_BACKEND: redis://redis:6379/2
-  AI_READER_S3_ENDPOINT_URL: http://minio:9000
+
+  AI_READER_REDIS_URL: redis://host.docker.internal:6379/0
+  AI_READER_CELERY_BROKER_URL: redis://host.docker.internal:6379/1
+  AI_READER_CELERY_RESULT_BACKEND: redis://host.docker.internal:6379/2
+
+  AI_READER_S3_ENDPOINT_URL: http://host.docker.internal:9000
   AI_READER_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
   AI_READER_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
   AI_READER_S3_BUCKET_NAME: ${AI_READER_S3_BUCKET_NAME:-ai-reader}
   AI_READER_S3_REGION_NAME: ${AI_READER_S3_REGION_NAME:-us-east-1}
+
   AI_READER_MAX_PDF_SIZE_BYTES: ${AI_READER_MAX_PDF_SIZE_BYTES:-104857600}
   AI_READER_MAX_PDF_PAGES: ${AI_READER_MAX_PDF_PAGES:-500}
+
   AI_READER_UPLOAD_RATE_LIMIT: ${AI_READER_UPLOAD_RATE_LIMIT:-5/minute}
   AI_READER_PROCESS_RATE_LIMIT: ${AI_READER_PROCESS_RATE_LIMIT:-10/minute}
+
   AI_READER_OPENAI_API_KEY: ${AI_READER_OPENAI_API_KEY:-}
   AI_READER_AI_MODEL: ${AI_READER_AI_MODEL:-gpt-5.6-luna}
   AI_READER_AI_TIMEOUT_SECONDS: ${AI_READER_AI_TIMEOUT_SECONDS:-45}
   AI_READER_AI_MAX_ATTEMPTS: ${AI_READER_AI_MAX_ATTEMPTS:-3}
   AI_READER_AI_RETRY_WAIT_SECONDS: ${AI_READER_AI_RETRY_WAIT_SECONDS:-1}
   AI_READER_AI_RETRY_MAX_WAIT_SECONDS: ${AI_READER_AI_RETRY_MAX_WAIT_SECONDS:-8}
+
   AI_READER_AI_INPUT_COST_PER_MILLION_TOKENS: ${AI_READER_AI_INPUT_COST_PER_MILLION_TOKENS:-0}
   AI_READER_AI_CACHED_INPUT_COST_PER_MILLION_TOKENS: ${AI_READER_AI_CACHED_INPUT_COST_PER_MILLION_TOKENS:-0}
   AI_READER_AI_OUTPUT_COST_PER_MILLION_TOKENS: ${AI_READER_AI_OUTPUT_COST_PER_MILLION_TOKENS:-0}
   AI_READER_AI_PRICING_VERSION: ${AI_READER_AI_PRICING_VERSION:-default}
   AI_READER_AI_MODEL_PRICE_LIST: "${AI_READER_AI_MODEL_PRICE_LIST:-{}}"
+
   AI_READER_NARRATION_CACHE_TTL_SECONDS: ${AI_READER_NARRATION_CACHE_TTL_SECONDS:-604800}
+
   AI_READER_TTS_VOICE: ${AI_READER_TTS_VOICE:-alloy}
   AI_READER_TTS_INSTRUCTION: ${AI_READER_TTS_INSTRUCTION:-Speak clearly, naturally, and calmly.}
   AI_READER_TTS_OPENAI_MODEL: ${AI_READER_TTS_OPENAI_MODEL:-gpt-4o-mini-tts}
@@ -44,8 +57,10 @@ x-app-environment: &app-environment
   AI_READER_TTS_MAX_BOOK_COST_USD: ${AI_READER_TTS_MAX_BOOK_COST_USD:-5}
   AI_READER_TTS_CHUNK_MAX_CHARACTERS: ${AI_READER_TTS_CHUNK_MAX_CHARACTERS:-1200}
   AI_READER_TTS_MAX_ATTEMPTS: ${AI_READER_TTS_MAX_ATTEMPTS:-3}
+
   AI_READER_PROGRESSIVE_PRIORITY_CHAPTER_COUNT: ${AI_READER_PROGRESSIVE_PRIORITY_CHAPTER_COUNT:-2}
   AI_READER_PLAYBACK_MIN_READY_DURATION_SECONDS: ${AI_READER_PLAYBACK_MIN_READY_DURATION_SECONDS:-600}
+
 
 x-app-code: &app-code
   volumes:
@@ -53,11 +68,11 @@ x-app-code: &app-code
     - ./alembic:/app/alembic:ro
     - ./alembic.ini:/app/alembic.ini:ro
 
+
 x-app-image: &app-image
   image: ai-reader:local
-  # This image is built locally by the API service. Never try to pull it from
-  # a registry before the one shared build has completed.
   pull_policy: never
+
 
 x-app-build: &app-build
   build:
@@ -65,63 +80,112 @@ x-app-build: &app-build
     dockerfile: Dockerfile
     target: api
 
+
+x-app-hosts: &app-hosts
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+
 services:
   postgres:
     image: postgres:17-alpine
+
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ai_reader}
       POSTGRES_USER: ${POSTGRES_USER:-ai_reader}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_reader}
+
+    ports:
+      - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
       interval: 5s
       timeout: 5s
       retries: 12
       start_period: 5s
+
     restart: unless-stopped
+
 
   redis:
     image: redis:7-alpine
+
     command: redis-server --appendonly yes
+
+    ports:
+      - "6379:6379"
+
     volumes:
       - redis_data:/data
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 12
+
     restart: unless-stopped
+
 
   minio:
     image: quay.io/minio/minio
+
     command: server /data --console-address ":9001"
 
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
     volumes:
       - minio_data:/data
 
     restart: unless-stopped
 
+
   migrate:
-    <<: [*app-image, *app-code]
+    <<: [*app-image, *app-code, *app-hosts]
+
     environment: *app-environment
-    command: sh -c "alembic upgrade head && python -m app.scripts.seed_development_user"
+
+    command: >
+      sh -c "
+      alembic upgrade head &&
+      python -m app.scripts.seed_development_user
+      "
+
     depends_on:
       postgres:
         condition: service_healthy
+
     restart: "no"
 
+
   api:
-    <<: [*app-image, *app-build, *app-code]
+    <<: [*app-image, *app-build, *app-code, *app-hosts]
+
     environment: *app-environment
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:8000"
+
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -129,19 +193,39 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+
     healthcheck:
       test:
-        ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3).status == 200"]
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3).status == 200"
+        ]
       interval: 60s
       timeout: 5s
       retries: 12
       start_period: 15s
+
     restart: unless-stopped
+
 
   worker-processing:
-    <<: [*app-image, *app-code]
+    <<: [*app-image, *app-code, *app-hosts]
+
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q processing --hostname=processing@%h --concurrency=2 --prefetch-multiplier=1 --loglevel=INFO" /app/app
+
+    command: >
+      watchfiles
+      --filter python
+      "celery -A app.workers.celery_app worker
+      -Q processing
+      --hostname=processing@%h
+      --concurrency=2
+      --prefetch-multiplier=1
+      --loglevel=INFO"
+      /app/app
+
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -149,18 +233,37 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+
     restart: unless-stopped
+
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d processing@$$HOSTNAME --timeout=3 | grep -q pong"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.workers.celery_app inspect ping -d processing@$$HOSTNAME --timeout=3 | grep -q pong"
+        ]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 20s
 
+
   worker-tts:
-    <<: [*app-image, *app-build, *app-code]
+    <<: [*app-image, *app-code, *app-hosts]
+
     environment: *app-environment
-    command: watchfiles --filter python "celery -A app.workers.celery_app worker -Q tts --hostname=tts@%h --concurrency=${AI_READER_TTS_WORKER_CONCURRENCY:-2} --prefetch-multiplier=1 --loglevel=INFO" /app/app
+
+    command: >
+      watchfiles
+      --filter python
+      "celery -A app.workers.celery_app worker
+      -Q tts
+      --hostname=tts@%h
+      --concurrency=${AI_READER_TTS_WORKER_CONCURRENCY:-2}
+      --prefetch-multiplier=1
+      --loglevel=INFO"
+      /app/app
+
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -168,13 +271,20 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+
     restart: unless-stopped
+
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d tts@$$HOSTNAME --timeout=3 | grep -q pong"]
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A app.workers.celery_app inspect ping -d tts@$$HOSTNAME --timeout=3 | grep -q pong"
+        ]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 20s
+
 
 volumes:
   postgres_data:

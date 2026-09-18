@@ -1,13 +1,16 @@
 import io
 import wave
 
+import httpx
 import pytest
+from openai import APIConnectionError, APITimeoutError
 
 from app.core.config import get_settings
 from app.services.audio.resilient_tts import AudioChunkProcessingError
 from app.services.audio.tts import (
     OpenAITTSSynthesizer,
     ReadingStyle,
+    RetryableTTSError,
     SpeechRequest,
     SpeechSpeed,
     speech_instruction,
@@ -71,6 +74,40 @@ def test_openai_tts_rejects_unknown_voice_before_call() -> None:
             SpeechRequest(text="Test", voice="unsupported")
         )
     assert client.audio.speech.calls == []
+
+
+def test_openai_tts_surfaces_transient_connection_errors_as_retryable_failures() -> None:
+    def raise_connection_error(**_kwargs: object) -> None:
+        request = httpx.Request("POST", "https://api.openai.com/v1/audio/speech")
+        raise APIConnectionError(message="Connection error.", request=request)
+
+    class FailingClient:
+        audio = type(
+            "Audio",
+            (),
+            {"speech": type("Speech", (), {"create": staticmethod(raise_connection_error)})()},
+        )()
+
+    with pytest.raises(RetryableTTSError, match="Connection error"):
+        OpenAITTSSynthesizer(get_settings(), client=FailingClient()).synthesize(
+            SpeechRequest(text="Test")
+        )
+
+    def raise_timeout_error(**_kwargs: object) -> None:
+        request = httpx.Request("POST", "https://api.openai.com/v1/audio/speech")
+        raise APITimeoutError(request=request)
+
+    class TimeoutClient:
+        audio = type(
+            "Audio",
+            (),
+            {"speech": type("Speech", (), {"create": staticmethod(raise_timeout_error)})()},
+        )()
+
+    with pytest.raises(RetryableTTSError, match="timed out"):
+        OpenAITTSSynthesizer(get_settings(), client=TimeoutClient()).synthesize(
+            SpeechRequest(text="Test")
+        )
 
 
 def test_slow_mode_changes_the_speech_instruction() -> None:

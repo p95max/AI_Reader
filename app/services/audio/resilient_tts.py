@@ -12,7 +12,7 @@ from app.services.audio.audio_generation import (
     GeneratedAudioChunk,
     audio_storage_key,
 )
-from app.services.audio.tts import ReadingStyle, SpeechSpeed, TTSError
+from app.services.audio.tts import ReadingStyle, RetryableTTSError, SpeechSpeed, TTSError
 from app.services.audio.tts_usage import TTSUsageCostCalculator
 from app.services.infrastructure.storage import ObjectStorageError
 
