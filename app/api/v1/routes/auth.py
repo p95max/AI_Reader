@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegistrationRequest, UserRead
+from app.schemas.auth import DevelopmentCredentialsRead, LoginRequest, RegistrationRequest, UserRead
 from app.services.authentication import (
     SESSION_COOKIE_NAME,
     claim_legacy_local_library,
@@ -94,3 +94,13 @@ async def me(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> User:
     return await get_current_user(request, session)
+
+
+@router.get("/development-credentials", response_model=DevelopmentCredentialsRead)
+async def development_credentials() -> DevelopmentCredentialsRead:
+    """Expose the seeded credentials only on a local development installation."""
+    if get_settings().environment not in {"local", "development"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    from app.scripts.seed_development_user import DEVELOPMENT_EMAIL, DEVELOPMENT_PASSWORD
+
+    return DevelopmentCredentialsRead(email=DEVELOPMENT_EMAIL, password=DEVELOPMENT_PASSWORD)

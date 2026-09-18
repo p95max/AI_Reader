@@ -144,6 +144,17 @@ function renderAuth() {
     input.addEventListener("input", validate);
     input.addEventListener("blur", () => { input.dataset.touched = "true"; validate(); });
   });
+  if (!registering) {
+    fetch("/api/v1/auth/development-credentials")
+      .then((response) => response.ok ? response.json() : null)
+      .then((credentials) => {
+        if (!credentials) return;
+        form.elements.email.value = credentials.email;
+        form.elements.password.value = credentials.password;
+        validate();
+      })
+      .catch(() => null);
+  }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     inputs.forEach((input) => { input.dataset.touched = "true"; });

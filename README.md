@@ -23,6 +23,11 @@ library, listening position, preferences, and usage totals. Before deploying
 outside local development, set `AI_READER_AUTH_SECRET_KEY` to a unique random
 value and set `AI_READER_AUTH_COOKIE_SECURE=true` behind HTTPS.
 
+For local and development Docker runs, migrations also create the test account
+`test@ai-reader.dev` with password `1234`. It is deliberately disabled in
+staging and production. When running without Docker, execute
+`uv run python -m app.scripts.seed_development_user` after `alembic upgrade`.
+
 Useful commands:
 
 ```bash

@@ -107,7 +107,7 @@ services:
   migrate:
     <<: [*app-image, *app-code]
     environment: *app-environment
-    command: alembic upgrade head
+    command: sh -c "alembic upgrade head && python -m app.scripts.seed_development_user"
     depends_on:
       postgres:
         condition: service_healthy
