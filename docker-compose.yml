@@ -156,6 +156,7 @@ services:
 
   migrate:
     <<: [*app-image, *app-code, *app-hosts]
+    network_mode: host
 
     environment: *app-environment
 
@@ -174,6 +175,7 @@ services:
 
   api:
     <<: [*app-image, *app-build, *app-code, *app-hosts]
+    network_mode: host
 
     environment: *app-environment
 
@@ -212,6 +214,7 @@ services:
 
   worker-processing:
     <<: [*app-image, *app-code, *app-hosts]
+    network_mode: host
 
     environment: *app-environment
 
@@ -250,6 +253,7 @@ services:
 
   worker-tts:
     <<: [*app-image, *app-code, *app-hosts]
+    network_mode: host
 
     environment: *app-environment
 
