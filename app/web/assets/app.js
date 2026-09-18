@@ -931,6 +931,7 @@ async function renderBookPage() {
         statusMessage.textContent = "Your first audio segment is ready.";
       }
       if (progress.total_chunks > 0 && progress.ready_chunks === progress.total_chunks) {
+        if (Number(extendEndPage.value) >= Number(extendEndPage.max)) processingControls.hidden = true;
         window.clearInterval(backgroundRefreshTimer);
         backgroundRefreshTimer = null;
       }
@@ -1144,12 +1145,14 @@ async function renderBookPage() {
     author.textContent = book.author;
     cover.className = `book-cover book-cover--${coverVariant(book.title)}`;
     cover.querySelector("b").textContent = book.title.slice(0, 1).toUpperCase() || "A";
-    processingControls.hidden = false;
     extendEndPage.max = String(book.page_count);
     extendEndPage.value = String(book.processing_end_page);
     const processPayload = (endPage = book.processing_end_page) => ({ reading_language: book.reading_language, voice: book.tts_voice, speed: book.tts_speed, style: book.tts_style, code_mode: book.code_mode, table_mode: book.table_mode, diagram_mode: book.diagram_mode, formula_mode: book.formula_mode, start_page: book.processing_start_page, end_page: Number(endPage) });
     const updateProcessingControls = (current) => {
       const paused = current.processing_paused;
+      const fullyProcessed = current.status === "ready" && current.processing_end_page >= current.page_count;
+      processingControls.hidden = fullyProcessed;
+      if (fullyProcessed) return;
       processingControlNote.textContent = paused ? "Processing is paused. Ready audio remains available." : `Pages ${current.processing_start_page}–${current.processing_end_page} of ${current.page_count} are selected.`;
       pauseProcessing.hidden = paused;
       resumeProcessing.hidden = !paused;
